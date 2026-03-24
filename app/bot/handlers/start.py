@@ -4,7 +4,7 @@ from sqlalchemy import select
 from app.database import async_session
 from app.models.employee import Employee
 from app.bot.keyboards import role_keyboard
-from app.config import BOSS_INVITE_CODE
+from app.config import BOSS_INVITE_CODE, STAFF_INVITE_CODE
 
 WAITING_INVITE_CODE = 1
 
@@ -17,7 +17,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         employee = result.scalar_one_or_none()
 
     if employee:
-        role_label = "사장" if employee.role == "boss" else "직원"
+        role_label = "대표" if employee.role == "boss" else "관리자"
         from app.bot.keyboards import main_menu_keyboard
         await update.message.reply_text(
             f"안녕하세요, {employee.name}님! ({role_label})",
@@ -40,11 +40,11 @@ async def role_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if role == "boss":
         context.user_data["pending_role"] = "boss"
-        await query.edit_message_text("사장 인증 코드를 입력해주세요:")
+        await query.edit_message_text("대표 인증 코드를 입력해주세요:")
         return WAITING_INVITE_CODE
     else:
         context.user_data["pending_role"] = "staff"
-        await query.edit_message_text("직원 초대 코드를 입력해주세요:")
+        await query.edit_message_text("관리자 초대 코드를 입력해주세요:")
         return WAITING_INVITE_CODE
 
 
@@ -53,11 +53,11 @@ async def invite_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     role = context.user_data.get("pending_role", "staff")
 
     if role == "boss" and code != BOSS_INVITE_CODE:
-        await update.message.reply_text("인증 코드가 올바르지 않습니다. 다시 입력해주세요:")
+        await update.message.reply_text("대표 인증 코드가 올바르지 않습니다. 다시 입력해주세요:")
         return WAITING_INVITE_CODE
 
-    if role == "staff" and code != BOSS_INVITE_CODE:
-        await update.message.reply_text("초대 코드가 올바르지 않습니다. 다시 입력해주세요:")
+    if role == "staff" and code != STAFF_INVITE_CODE:
+        await update.message.reply_text("관리자 초대 코드가 올바르지 않습니다. 다시 입력해주세요:")
         return WAITING_INVITE_CODE
 
     user = update.effective_user
@@ -72,7 +72,7 @@ async def invite_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         db.add(employee)
         await db.commit()
 
-    role_label = "사장" if role == "boss" else "직원"
+    role_label = "대표" if role == "boss" else "관리자"
     from app.bot.keyboards import main_menu_keyboard
     await update.message.reply_text(
         f"등록 완료! {name}님 ({role_label})",

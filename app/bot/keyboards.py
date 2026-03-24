@@ -2,10 +2,16 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime, timedelta
 
 
+ROLE_LABELS = {
+    "boss": "대표",
+    "staff": "관리자",
+}
+
+
 def role_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("사장", callback_data="role:boss")],
-        [InlineKeyboardButton("직원 (초대코드 필요)", callback_data="role:staff")],
+        [InlineKeyboardButton("대표", callback_data="role:boss")],
+        [InlineKeyboardButton("관리자 (초대코드 필요)", callback_data="role:staff")],
     ])
 
 
@@ -135,6 +141,17 @@ AREA_LABELS = {
     "nonsan": "논산",
     "outer": "외곽(추가비용)",
 }
+
+
+def payment_select_keyboard():
+    """예약 등록 시 결제 방법 선택"""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("현금(계좌이체)", callback_data="paysel:cash"),
+            InlineKeyboardButton("카드", callback_data="paysel:card"),
+        ],
+        [InlineKeyboardButton("네이버예약", callback_data="paysel:naver")],
+    ])
 
 
 def special_notes_keyboard():

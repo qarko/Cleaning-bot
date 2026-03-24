@@ -52,10 +52,25 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 정산 처리
     if action == "settle":
-        await query.edit_message_text(
-            "결제 방법을 선택해주세요:",
-            reply_markup=payment_method_keyboard(reservation_no),
-        )
+        async with async_session() as db:
+            r = await get_reservation(db, reservation_no)
+        if r and r.payment_method:
+            # 예약 시 결제 방법이 지정된 경우 → 확인 후 정산
+            method_label = PAYMENT_LABELS.get(r.payment_method, r.payment_method)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            confirm_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"✅ {method_label}로 정산 확인", callback_data=f"pay:{r.payment_method}:{reservation_no}")],
+                [InlineKeyboardButton("결제 방법 변경", callback_data=f"pay:change:{reservation_no}")],
+            ])
+            await query.edit_message_text(
+                f"결제 방법: {method_label}\n금액: {r.price:,}원\n\n결제를 확인해주세요:",
+                reply_markup=confirm_kb,
+            )
+        else:
+            await query.edit_message_text(
+                "결제 방법을 선택해주세요:",
+                reply_markup=payment_method_keyboard(reservation_no),
+            )
         return
 
     # 취소 처리
@@ -176,6 +191,14 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # pay:<method>:<reservation_no>
     method = parts[1]
     reservation_no = parts[2]
+
+    # 결제 방법 변경 요청
+    if method == "change":
+        await query.edit_message_text(
+            "결제 방법을 선택해주세요:",
+            reply_markup=payment_method_keyboard(reservation_no),
+        )
+        return
 
     async with async_session() as db:
         payment = await settle_reservation(db, reservation_no, method)

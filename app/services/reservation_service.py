@@ -59,6 +59,7 @@ async def create_reservation(db: AsyncSession, data: dict) -> Reservation:
         pickup_address=data.get("address"),
         cleaning_method=first_item.get("cleaning_method", data.get("cleaning_method")),
         area=data.get("area"),
+        payment_method=data.get("payment_method"),
         items_json=json.dumps(items, ensure_ascii=False) if items else None,
         special_notes=data.get("special_notes"),
         status="pending",

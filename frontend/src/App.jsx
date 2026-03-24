@@ -21,7 +21,7 @@ export default function App() {
         <div className="empty" style={{ paddingTop: 100 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
           <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>접근 권한이 없습니다</div>
-          <div style={{ color: 'var(--hint)' }}>사장만 대시보드를 사용할 수 있습니다</div>
+          <div style={{ color: 'var(--hint)' }}>대표만 대시보드를 사용할 수 있습니다</div>
         </div>
       </div>
     );

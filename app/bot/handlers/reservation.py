@@ -15,14 +15,14 @@ from app.bot.keyboards import (
     item_type_keyboard, item_subtype_keyboard, quantity_keyboard,
     date_keyboard, time_keyboard, special_notes_keyboard, confirm_keyboard,
     reservation_action_keyboard, reservation_list_keyboard,
-    cleaning_method_keyboard, area_keyboard,
+    cleaning_method_keyboard, area_keyboard, payment_select_keyboard,
     ITEM_LABELS, TIME_LABELS, STATUS_LABELS, METHOD_LABELS, AREA_LABELS,
-    CLEANING_METHOD_ITEMS,
+    CLEANING_METHOD_ITEMS, PAYMENT_LABELS,
 )
 from app.bot.notifications import notify_group_new_reservation
 
 # Conversation states
-NAME, PHONE, AREA, ADDRESS, ITEM_TYPE, ITEM_SUBTYPE, CLEANING_METHOD, QUANTITY, QUANTITY_INPUT, ITEMS_SUMMARY, DATE, TIME, NOTES, CONFIRM = range(14)
+NAME, PHONE, AREA, ADDRESS, ITEM_TYPE, ITEM_SUBTYPE, CLEANING_METHOD, QUANTITY, QUANTITY_INPUT, ITEMS_SUMMARY, DATE, TIME, PAYMENT_SELECT, NOTES, CONFIRM = range(15)
 
 
 async def check_auth(update: Update) -> Employee | None:
@@ -38,7 +38,7 @@ async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("먼저 /start 로 등록해주세요.")
         return ConversationHandler.END
     if employee.role != "boss":
-        await update.message.reply_text("예약 등록은 사장만 가능합니다.")
+        await update.message.reply_text("예약 등록은 대표만 가능합니다.")
         return ConversationHandler.END
 
     context.user_data["reservation"] = {"items": [], "current_item": {}}
@@ -269,6 +269,18 @@ async def time_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_slot = query.data.split(":")[1]
     context.user_data["reservation"]["scheduled_time"] = time_slot
     await query.edit_message_text(
+        "결제 방법을 선택해주세요:",
+        reply_markup=payment_select_keyboard(),
+    )
+    return PAYMENT_SELECT
+
+
+async def payment_select_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    method = query.data.split(":")[1]
+    context.user_data["reservation"]["payment_method"] = method
+    await query.edit_message_text(
         "특이사항을 입력해주세요:\n(없으면 아래 버튼 클릭)",
         reply_markup=special_notes_keyboard(),
     )
@@ -313,9 +325,12 @@ def build_confirm_text(data: dict) -> str:
         price = item.get("price", 0)
         text += f"  {i}. {label}{subtype_str}{method_str} x{qty} — {price:,}원\n"
 
+    pay_method = PAYMENT_LABELS.get(data.get("payment_method", ""), "미정")
+
     text += (
         f"━━━━━━━━━━━━━━\n"
         f"일시: {data['scheduled_date'].strftime('%Y.%m.%d')} {TIME_LABELS[data['scheduled_time']]}\n"
+        f"결제: {pay_method}\n"
         f"특이사항: {notes}\n"
         f"합계: {total:,}원\n"
         "━━━━━━━━━━━━━━"
@@ -492,6 +507,7 @@ def get_reservation_handler():
             ITEMS_SUMMARY: [CallbackQueryHandler(items_summary_callback, pattern=r"^items:")],
             DATE: [CallbackQueryHandler(date_callback, pattern=r"^date")],
             TIME: [CallbackQueryHandler(time_callback, pattern=r"^time:")],
+            PAYMENT_SELECT: [CallbackQueryHandler(payment_select_callback, pattern=r"^paysel:")],
             NOTES: [
                 CallbackQueryHandler(notes_callback, pattern=r"^notes:"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, notes_input),

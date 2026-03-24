@@ -65,7 +65,7 @@ async def verify_boss(request: Request):
         employee = result.scalar_one_or_none()
 
     if not employee or employee.role != "boss":
-        raise HTTPException(status_code=403, detail="사장만 접근할 수 있습니다")
+        raise HTTPException(status_code=403, detail="대표만 접근할 수 있습니다")
 
     return employee
 

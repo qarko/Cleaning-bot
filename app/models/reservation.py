@@ -19,6 +19,7 @@ class Reservation(Base):
     delivery_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     cleaning_method: Mapped[str | None] = mapped_column(String(10), nullable=True)  # dry/wet
     area: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # cash/card/naver
     items_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # 복수 품목 JSON
     notify_messages: Mapped[str | None] = mapped_column(Text, nullable=True)  # 알림 메시지 ID 추적 JSON
     special_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

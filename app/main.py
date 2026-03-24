@@ -69,11 +69,37 @@ async def lifespan(app: FastAPI):
         skip_photo_handler,
     ), group=1)  # group=1로 분리하여 ConversationHandler와 충돌 방지
 
+    # 글로벌 에러 핸들러
+    async def error_handler(update, context):
+        logger.error(f"Bot error: {context.error}", exc_info=context.error)
+        if update and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "처리 중 오류가 발생했습니다. 다시 시도해주세요."
+                )
+            except Exception:
+                pass
+
+    bot_app.add_error_handler(error_handler)
+
     # 봇 시작
     await bot_app.initialize()
     await bot_app.start()
     await bot_app.updater.start_polling(drop_pending_updates=True)
     logger.info("Telegram bot started")
+
+    # 봇 명령어 목록 설정
+    from telegram import BotCommand
+    await bot_app.bot.set_my_commands([
+        BotCommand("start", "시작 / 메뉴"),
+        BotCommand("new", "새 예약 등록"),
+        BotCommand("today", "오늘 예약"),
+        BotCommand("list", "전체 예약"),
+        BotCommand("mytasks", "내 할 일"),
+        BotCommand("quote", "견적 계산"),
+        BotCommand("customer", "고객 조회"),
+        BotCommand("cancel", "예약 등록 취소"),
+    ])
 
     # 스케줄러 (매일 아침 8시 일정 알림)
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")

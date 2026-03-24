@@ -47,13 +47,27 @@ async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def name_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["reservation"]["name"] = update.message.text.strip()
-    await update.message.reply_text("연락처를 입력해주세요:\n(예: 010-1234-5678)")
+    name = update.message.text.strip()
+    if len(name) < 1 or len(name) > 20:
+        await update.message.reply_text("고객명을 다시 입력해주세요. (1~20자)")
+        return NAME
+    context.user_data["reservation"]["name"] = name
+    await update.message.reply_text("📱 연락처를 입력해주세요:\n(예: 010-1234-5678)")
     return PHONE
 
 
 async def phone_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["reservation"]["phone"] = update.message.text.strip()
+    phone = update.message.text.strip().replace("-", "").replace(" ", "")
+
+    if not phone.isdigit() or len(phone) != 11 or not phone.startswith("010"):
+        await update.message.reply_text(
+            "올바른 휴대폰 번호를 입력해주세요.\n(예: 010-1234-5678 또는 01012345678)"
+        )
+        return PHONE
+
+    # 포맷팅: 010-1234-5678
+    formatted = f"{phone[:3]}-{phone[3:7]}-{phone[7:]}"
+    context.user_data["reservation"]["phone"] = formatted
     await update.message.reply_text("지역을 선택해주세요:", reply_markup=area_keyboard())
     return AREA
 

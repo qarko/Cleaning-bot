@@ -39,6 +39,8 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     parts = query.data.split(":")
+    if len(parts) < 3:
+        return
     # action:<status>:<reservation_no>
     action = parts[1]
     reservation_no = parts[2]

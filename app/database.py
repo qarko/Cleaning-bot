@@ -18,7 +18,4 @@ async def get_db() -> AsyncSession:
 async def init_db():
     async with engine.begin() as conn:
         from app.models import customer, reservation, employee, task_update, payment, pricing
-        # drop_all + create_all 로 스키마 변경 반영 (초기 개발 단계)
-        # TODO: 운영 단계에서는 Alembic 마이그레이션으로 교체
-        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

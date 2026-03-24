@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>올그린 대전점 | 카시트·매트리스·소파 전문 세척</title>
+    <meta name="description" content="대전·세종·논산 카시트, 매트리스, 소파 전문 세척 서비스. 수거부터 배송까지 원스톱! 올그린 대전점">
+    <meta property="og:title" content="올그린 대전점 | 전문 세척 서비스">
+    <meta property="og:description" content="카시트·매트리스·소파 전문 세척. 수거-세척-배송 원스톱 서비스">
+    <meta property="og:type" content="website">
+    <style>
+        :root {
+            --primary: #2D8C4E;
+            --primary-dark: #1F6B3A;
+            --primary-light: #E8F5EC;
+            --accent: #FF6B35;
+            --dark: #1A1A2E;
+            --gray: #6B7280;
+            --light-gray: #F3F4F6;
+            --white: #FFFFFF;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+            color: var(--dark);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 80px 20px 60px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: -30px;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: var(--white);
+            border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .hero h1 {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .hero .subtitle {
+            font-size: 18px;
+            opacity: 0.9;
+            margin-bottom: 24px;
+        }
+
+        .hero .tagline {
+            font-size: 15px;
+            opacity: 0.8;
+            margin-bottom: 32px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-outline { background: rgba(255,255,255,0.15); color: white; border: 2px solid rgba(255,255,255,0.5); }
+
+        /* Section */
+        .section {
+            padding: 60px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--dark);
+        }
+
+        .section-desc {
+            text-align: center;
+            color: var(--gray);
+            margin-bottom: 40px;
+            font-size: 15px;
+        }
+
+        /* Services */
+        .services {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .service-card {
+            background: var(--white);
+            border: 1px solid #E5E7EB;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            transition: box-shadow 0.2s;
+        }
+
+        .service-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+
+        .service-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        .service-card h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: var(--primary-dark);
+        }
+
+        .service-card p {
+            font-size: 14px;
+            color: var(--gray);
+        }
+
+        /* Pricing */
+        .pricing-section { background: var(--light-gray); }
+
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .pricing-table th {
+            background: var(--primary);
+            color: white;
+            padding: 14px 16px;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .pricing-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #F0F0F0;
+            font-size: 14px;
+        }
+
+        .pricing-table tr:last-child td { border-bottom: none; }
+        .pricing-table tr:hover td { background: var(--primary-light); }
+
+        .price-tag {
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+
+        .price-note {
+            font-size: 12px;
+            color: var(--gray);
+        }
+
+        /* Process */
+        .process-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            position: relative;
+        }
+
+        .step {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            position: relative;
+            padding-bottom: 32px;
+        }
+
+        .step:last-child { padding-bottom: 0; }
+
+        .step-number {
+            width: 44px;
+            height: 44px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step:not(:last-child) .step-number::after {
+            content: '';
+            position: absolute;
+            top: 44px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: calc(100% + 32px - 44px);
+            background: #D1D5DB;
+        }
+
+        .step-content h3 {
+            font-size: 17px;
+            margin-bottom: 4px;
+        }
+
+        .step-content p {
+            font-size: 14px;
+            color: var(--gray);
+        }
+
+        /* Area */
+        .area-badges {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .area-badge {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .area-note {
+            text-align: center;
+            font-size: 13px;
+            color: var(--gray);
+        }
+
+        /* Info */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .info-card {
+            background: var(--white);
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .info-card h4 {
+            font-size: 13px;
+            color: var(--gray);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-card p {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--dark);
+            color: rgba(255,255,255,0.7);
+            padding: 40px 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .footer-brand {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        /* CTA Banner */
+        .cta-banner {
+            background: linear-gradient(135deg, var(--accent) 0%, #E85D2A 100%);
+            color: white;
+            text-align: center;
+            padding: 48px 20px;
+        }
+
+        .cta-banner h2 {
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+
+        .cta-banner p {
+            opacity: 0.9;
+            margin-bottom: 24px;
+        }
+
+        .cta-banner .btn { background: white; color: var(--accent); }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .hero h1 { font-size: 26px; }
+            .hero .subtitle { font-size: 16px; }
+            .section-title { font-size: 22px; }
+            .btn { padding: 12px 20px; font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+<section class="hero">
+    <div class="hero-badge">대전 · 세종 · 논산</div>
+    <h1>올그린 대전점</h1>
+    <p class="subtitle">카시트 · 매트리스 · 소파 전문 세척</p>
+    <p class="tagline">수거부터 배송까지, 깨끗한 생활을 배달합니다</p>
+    <div class="cta-buttons">
+        <a href="tel:010-0000-0000" class="btn btn-primary">전화 상담</a>
+        <a href="#pricing" class="btn btn-outline">가격표 보기</a>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">전문 세척 서비스</h2>
+    <p class="section-desc">아이가 사용하는 카시트부터 매일 사용하는 매트리스, 소파까지</p>
+    <div class="services">
+        <div class="service-card">
+            <div class="service-icon">🚗</div>
+            <h3>카시트 세척</h3>
+            <p>전 제품 분해 세척<br>진드기·세균 제거</p>
+        </div>
+        <div class="service-card">
+            <div class="service-icon">🛏️</div>
+            <h3>매트리스 세척</h3>
+            <p>건식 / 습식 선택<br>싱글~킹 전 사이즈</p>
+        </div>
+        <div class="service-card">
+            <div class="service-icon">🛋️</div>
+            <h3>소파 세척</h3>
+            <p>건식 / 습식 선택<br>2인~5인 전 사이즈</p>
+        </div>
+        <div class="service-card">
+            <div class="service-icon">👶</div>
+            <h3>유모차·아기띠</h3>
+            <p>쌍둥이유모차, 웨건<br>아기띠 세척</p>
+        </div>
+    </div>
+</section>
+
+<section class="section pricing-section" id="pricing">
+    <h2 class="section-title">가격표</h2>
+    <p class="section-desc">합리적인 가격, 확실한 세척</p>
+
+    <table class="pricing-table">
+        <thead>
+            <tr>
+                <th>품목</th>
+                <th>종류</th>
+                <th>가격</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>카시트</strong></td>
+                <td>전 제품</td>
+                <td class="price-tag">40,000원</td>
+            </tr>
+            <tr>
+                <td><strong>쌍둥이유모차</strong></td>
+                <td>-</td>
+                <td class="price-tag">50,000원</td>
+            </tr>
+            <tr>
+                <td><strong>웨건</strong></td>
+                <td>-</td>
+                <td class="price-tag">50,000원</td>
+            </tr>
+            <tr><td colspan="3" style="background:#F0F7F2;font-weight:600;color:#1F6B3A;">매트리스 (건식/습식 동일가)</td></tr>
+            <tr>
+                <td></td>
+                <td>싱글</td>
+                <td class="price-tag">40,000원</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>더블</td>
+                <td class="price-tag">45,000원</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>퀸</td>
+                <td class="price-tag">50,000원</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>킹</td>
+                <td class="price-tag">60,000원</td>
+            </tr>
+            <tr><td colspan="3" style="background:#F0F7F2;font-weight:600;color:#1F6B3A;">소파 (건식/습식 동일가)</td></tr>
+            <tr>
+                <td></td>
+                <td>2인</td>
+                <td class="price-tag">40,000원</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>3인</td>
+                <td class="price-tag">50,000원</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>4인</td>
+                <td class="price-tag">60,000원</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>5인</td>
+                <td class="price-tag">70,000원</td>
+            </tr>
+            <tr><td colspan="3" style="background:#F0F7F2;font-weight:600;color:#1F6B3A;">기타</td></tr>
+            <tr>
+                <td><strong>아기띠</strong></td>
+                <td>단독</td>
+                <td class="price-tag">20,000원</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>카시트/유모차 동시</td>
+                <td class="price-tag">10,000원</td>
+            </tr>
+        </tbody>
+    </table>
+    <p class="price-note" style="text-align:center;margin-top:12px;">* 세종·논산 외곽 지역은 수거/배송비가 추가될 수 있습니다</p>
+</section>
+
+<section class="section">
+    <h2 class="section-title">이용 절차</h2>
+    <p class="section-desc">전화 한 통이면 끝, 수거부터 배송까지</p>
+    <div class="process-steps">
+        <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>예약 상담</h3>
+                <p>전화 또는 네이버 예약으로 상담 (24시간 가능)</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>방문 수거</h3>
+                <p>약속된 날짜에 직접 방문하여 수거</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>전문 세척</h3>
+                <p>오전 수거 → 당일 세척 / 오후 수거 → 익일 세척</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>배송 완료</h3>
+                <p>세척 완료 후 1~2일 내 깨끗하게 배송</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" style="background:var(--light-gray);">
+    <h2 class="section-title">서비스 지역</h2>
+    <p class="section-desc">대전·세종·논산 전 지역 수거/배송</p>
+    <div class="area-badges">
+        <span class="area-badge">대전광역시</span>
+        <span class="area-badge">세종특별자치시</span>
+        <span class="area-badge">논산시</span>
+    </div>
+    <p class="area-note">* 세종·논산 외곽 지역은 추가 비용이 발생할 수 있습니다<br>* 일요일에도 수거/배송 가능합니다</p>
+</section>
+
+<section class="section">
+    <h2 class="section-title">운영 안내</h2>
+    <div class="info-grid">
+        <div class="info-card">
+            <h4>영업시간</h4>
+            <p>09:00 ~ 19:00</p>
+        </div>
+        <div class="info-card">
+            <h4>예약 상담</h4>
+            <p>24시간 가능</p>
+        </div>
+        <div class="info-card">
+            <h4>휴무일</h4>
+            <p>일요일 (수거/배송 가능)</p>
+        </div>
+        <div class="info-card">
+            <h4>결제 방법</h4>
+            <p>현금 · 카드 · 네이버예약</p>
+        </div>
+    </div>
+</section>
+
+<section class="cta-banner">
+    <h2>지금 바로 상담하세요</h2>
+    <p>깨끗한 생활, 올그린이 도와드립니다</p>
+    <a href="tel:010-0000-0000" class="btn">전화 상담하기</a>
+</section>
+
+<footer class="footer">
+    <p class="footer-brand">올그린 대전점</p>
+    <p>카시트 · 매트리스 · 소파 전문 세척</p>
+    <p style="margin-top:16px;">대전 · 세종 · 논산</p>
+</footer>
+
+</body>
+</html>

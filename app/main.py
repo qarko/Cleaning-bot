@@ -88,6 +88,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cleaning Business Bot", lifespan=lifespan)
 
+# 랜딩 페이지 (정적 파일)
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+@app.get("/")
+async def landing():
+    return FileResponse(os.path.join(static_dir, "index.html"))
+
 
 @app.get("/health")
 async def health():

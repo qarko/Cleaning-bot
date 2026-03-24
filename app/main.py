@@ -55,9 +55,9 @@ async def lifespan(app: FastAPI):
     bot_app.add_handler(CallbackQueryHandler(quote_method_callback, pattern=r"^q_method:"))
     bot_app.add_handler(CallbackQueryHandler(quote_qty_callback, pattern=r"^q_qty:"))
 
-    # 메뉴 버튼 핸들러 (ReplyKeyboard 텍스트)
+    # 메뉴 버튼 핸들러 (📋 새 예약은 ConversationHandler에서 처리)
     bot_app.add_handler(MessageHandler(
-        filters.Regex(r"^(📋 새 예약|📅 오늘 예약|📝 전체 예약|📌 할 일|💰 견적 계산|👤 고객 조회)$"),
+        filters.Regex(r"^(📅 오늘 예약|📝 전체 예약|📌 할 일|💰 견적 계산|👤 고객 조회)$"),
         menu_handler,
     ))
 

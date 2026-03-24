@@ -373,7 +373,10 @@ async def view_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def get_reservation_handler():
     return ConversationHandler(
-        entry_points=[CommandHandler("new", new_command)],
+        entry_points=[
+            CommandHandler("new", new_command),
+            MessageHandler(filters.Regex(r"^📋 새 예약$"), new_command),
+        ],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name_input)],
             PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, phone_input)],

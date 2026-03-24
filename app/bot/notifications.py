@@ -62,11 +62,7 @@ async def notify_other_role(bot: Bot, sender_role: str, text: str, reply_markup=
 
 async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
     """새 예약 → 직원에게 알림 (액션 버튼 포함)"""
-    item = ITEM_LABELS.get(data["item_type"], data["item_type"])
-    subtype = data.get("item_subtype", "")
-    subtype_str = f" {subtype}" if subtype else ""
-    method = data.get("cleaning_method")
-    method_str = f" {METHOD_LABELS.get(method, '')}" if method else ""
+    items = data.get("items", [])
     area = AREA_LABELS.get(data.get("area", ""), "")
     notes = data.get("special_notes") or "없음"
     price = data.get("price", 0)
@@ -79,10 +75,21 @@ async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
         f"연락처: {data['phone']}\n"
         f"지역: {area}\n"
         f"주소: {data.get('address', '-')}\n"
-        f"품목: {item}{subtype_str}{method_str} x {data.get('quantity', 1)}\n"
+    )
+    for item in items:
+        label = ITEM_LABELS.get(item["item_type"], item["item_type"])
+        subtype = item.get("item_subtype", "")
+        subtype_str = f" {subtype}" if subtype else ""
+        method = item.get("cleaning_method")
+        method_str = f" {METHOD_LABELS.get(method, '')}" if method else ""
+        qty = item.get("quantity", 1)
+        iprice = item.get("price", 0)
+        text += f"  • {label}{subtype_str}{method_str} x{qty} — {iprice:,}원\n"
+
+    text += (
         f"일시: {data['scheduled_date'].strftime('%Y.%m.%d')} {TIME_LABELS[data['scheduled_time']]}\n"
         f"특이사항: {notes}\n"
-        f"금액: {price:,}원\n"
+        f"합계: {price:,}원\n"
         f"━━━━━━━━━━━━━━"
     )
     # 직원에게 액션 버튼과 함께 전송

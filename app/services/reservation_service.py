@@ -42,17 +42,24 @@ async def create_reservation(db: AsyncSession, data: dict) -> Reservation:
 
     reservation_no = await generate_reservation_no(db, data.get("scheduled_date", date.today()))
 
+    import json
+    items = data.get("items", [])
+    # 대표 품목 (첫 번째)
+    first_item = items[0] if items else {}
+    total_qty = sum(i.get("quantity", 1) for i in items) if items else data.get("quantity", 1)
+
     reservation = Reservation(
         reservation_no=reservation_no,
         customer_id=customer.id,
-        item_type=data["item_type"],
-        item_subtype=data.get("item_subtype"),
-        quantity=data.get("quantity", 1),
+        item_type=first_item.get("item_type", data.get("item_type", "")),
+        item_subtype=first_item.get("item_subtype", data.get("item_subtype")),
+        quantity=total_qty,
         scheduled_date=data["scheduled_date"],
         scheduled_time=data["scheduled_time"],
         pickup_address=data.get("address"),
-        cleaning_method=data.get("cleaning_method"),
+        cleaning_method=first_item.get("cleaning_method", data.get("cleaning_method")),
         area=data.get("area"),
+        items_json=json.dumps(items, ensure_ascii=False) if items else None,
         special_notes=data.get("special_notes"),
         status="pending",
         price=data.get("price", 0),

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -86,6 +86,18 @@ async def get_today_reservations(db: AsyncSession) -> list[Reservation]:
         select(Reservation)
         .options(selectinload(Reservation.customer))
         .where(Reservation.scheduled_date == today)
+        .where(Reservation.status != "cancelled")
+        .order_by(Reservation.scheduled_time)
+    )
+    return list(result.scalars().all())
+
+
+async def get_tomorrow_reservations(db: AsyncSession) -> list[Reservation]:
+    tomorrow = date.today() + timedelta(days=1)
+    result = await db.execute(
+        select(Reservation)
+        .options(selectinload(Reservation.customer))
+        .where(Reservation.scheduled_date == tomorrow)
         .where(Reservation.status != "cancelled")
         .order_by(Reservation.scheduled_time)
     )

@@ -105,9 +105,15 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "employee_name": employee.name,
             "employee_role": employee.role,
         }
-        await query.edit_message_text(
-            f"📸 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)",
-        )
+        # 세척완료 시 특이사항 입력 안내 추가
+        if action == "cleaned":
+            await query.edit_message_text(
+                f"📸 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)\n\n💡 특이사항이 있으면 사진과 함께 또는 텍스트로 입력해주세요.",
+            )
+        else:
+            await query.edit_message_text(
+                f"📸 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)",
+            )
         return
 
     # 사진 불필요한 상태 변경
@@ -128,8 +134,8 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     photo_url = None
+    memo = update.message.caption  # 사진과 함께 보낸 텍스트
     if update.message.photo:
-        # 가장 큰 사진 가져오기
         photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
         photo_url = file.file_path  # TODO: Cloudinary 업로드로 교체
@@ -141,7 +147,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with async_session() as db:
         r = await get_reservation(db, reservation_no)
         if r and stage:
-            await add_task_update(db, r.id, stage, pending["employee_id"], photo_url)
+            await add_task_update(db, r.id, stage, pending["employee_id"], photo_url, memo=memo)
         r = await update_reservation_status(db, reservation_no, status)
 
     if r:
@@ -157,7 +163,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """사진 건너뛰기 - pending_action이 있을 때만 동작"""
+    """사진 건너뛰기 또는 메모 입력 - pending_action이 있을 때만 동작"""
     pending = context.user_data.get("pending_action")
     if not pending:
         return  # pending_action이 없으면 무시
@@ -165,11 +171,12 @@ async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     reservation_no = pending["reservation_no"]
     status = pending["status"]
     stage = STATUS_STAGE_MAP.get(status)
+    memo = update.message.text.strip() if update.message.text else None
 
     async with async_session() as db:
         r = await get_reservation(db, reservation_no)
         if r and stage:
-            await add_task_update(db, r.id, stage, pending["employee_id"])
+            await add_task_update(db, r.id, stage, pending["employee_id"], memo=memo)
         r = await update_reservation_status(db, reservation_no, status)
 
     if r:

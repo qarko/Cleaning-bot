@@ -235,13 +235,13 @@ def main_menu_keyboard(role: str = "boss"):
     if role == "boss":
         keyboard = [
             [KeyboardButton("📋 새 예약"), KeyboardButton("📅 오늘 예약")],
-            [KeyboardButton("📝 전체 예약"), KeyboardButton("📌 할 일")],
-            [KeyboardButton("💰 견적 계산"), KeyboardButton("👤 고객 조회")],
+            [KeyboardButton("📆 내일 예약"), KeyboardButton("📝 전체 예약")],
+            [KeyboardButton("📌 할 일"), KeyboardButton("💰 견적 계산")],
         ]
     else:
         keyboard = [
-            [KeyboardButton("📅 오늘 예약"), KeyboardButton("📌 할 일")],
-            [KeyboardButton("📝 전체 예약")],
+            [KeyboardButton("📅 오늘 예약"), KeyboardButton("📆 내일 예약")],
+            [KeyboardButton("📌 할 일"), KeyboardButton("📝 전체 예약")],
         ]
 
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)

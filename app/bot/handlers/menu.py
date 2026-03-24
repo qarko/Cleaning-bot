@@ -2,7 +2,7 @@
   NOTE: '📋 새 예약'은 ConversationHandler entry_point에서 직접 처리"""
 from telegram import Update
 from telegram.ext import ContextTypes
-from app.bot.handlers.reservation import today_command, list_command
+from app.bot.handlers.reservation import today_command, tomorrow_command, list_command
 from app.bot.handlers.task import mytasks_command
 from app.bot.handlers.quote import quote_command
 
@@ -12,6 +12,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     handlers = {
         "📅 오늘 예약": today_command,
+        "📆 내일 예약": tomorrow_command,
         "📝 전체 예약": list_command,
         "📌 할 일": mytasks_command,
         "💰 견적 계산": quote_command,

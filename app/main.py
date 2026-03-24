@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.config import BOT_TOKEN
 from app.database import init_db
 from app.bot.handlers.start import get_start_handler
-from app.bot.handlers.reservation import get_reservation_handler, today_command, list_command, view_callback
+from app.bot.handlers.reservation import get_reservation_handler, today_command, tomorrow_command, list_command, view_callback
 from app.bot.handlers.task import action_callback, photo_handler, skip_photo_handler, payment_callback, mytasks_command
 from app.bot.handlers.quote import quote_command, quote_item_callback, quote_subtype_callback, quote_method_callback, quote_qty_callback
 from app.bot.handlers.customer import customer_command
@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
     bot_app.add_handler(get_start_handler())
     bot_app.add_handler(get_reservation_handler())
     bot_app.add_handler(CommandHandler("today", today_command))
+    bot_app.add_handler(CommandHandler("tomorrow", tomorrow_command))
     bot_app.add_handler(CommandHandler("list", list_command))
     bot_app.add_handler(CommandHandler("mytasks", mytasks_command))
     bot_app.add_handler(CommandHandler("quote", quote_command))
@@ -57,7 +58,7 @@ async def lifespan(app: FastAPI):
 
     # 메뉴 버튼 핸들러 (📋 새 예약은 ConversationHandler에서 처리)
     bot_app.add_handler(MessageHandler(
-        filters.Regex(r"^(📅 오늘 예약|📝 전체 예약|📌 할 일|💰 견적 계산|👤 고객 조회)$"),
+        filters.Regex(r"^(📅 오늘 예약|📆 내일 예약|📝 전체 예약|📌 할 일|💰 견적 계산|👤 고객 조회)$"),
         menu_handler,
     ))
 
@@ -94,10 +95,10 @@ async def lifespan(app: FastAPI):
         BotCommand("start", "시작 / 메뉴"),
         BotCommand("new", "새 예약 등록"),
         BotCommand("today", "오늘 예약"),
+        BotCommand("tomorrow", "내일 예약"),
         BotCommand("list", "전체 예약"),
         BotCommand("mytasks", "내 할 일"),
         BotCommand("quote", "견적 계산"),
-        BotCommand("customer", "고객 조회"),
         BotCommand("cancel", "예약 등록 취소"),
     ])
 

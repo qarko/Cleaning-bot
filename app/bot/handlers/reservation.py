@@ -8,8 +8,8 @@ from sqlalchemy import select
 from app.database import async_session
 from app.models.employee import Employee
 from app.services.reservation_service import (
-    create_reservation, get_today_reservations, get_all_reservations,
-    get_reservation, get_price,
+    create_reservation, get_today_reservations, get_tomorrow_reservations,
+    get_all_reservations, get_reservation, get_price,
 )
 from app.bot.keyboards import (
     item_type_keyboard, item_subtype_keyboard, quantity_keyboard,
@@ -22,7 +22,7 @@ from app.bot.keyboards import (
 from app.bot.notifications import notify_group_new_reservation
 
 # Conversation states
-NAME, PHONE, AREA, ADDRESS, ITEM_TYPE, ITEM_SUBTYPE, CLEANING_METHOD, QUANTITY, QUANTITY_INPUT, ITEMS_SUMMARY, DATE, TIME, PAYMENT_SELECT, NOTES, CONFIRM = range(15)
+PHONE, AREA, ADDRESS, ITEM_TYPE, ITEM_SUBTYPE, CLEANING_METHOD, QUANTITY, QUANTITY_INPUT, ITEMS_SUMMARY, DATE, TIME, PAYMENT_SELECT, NOTES, CONFIRM = range(14)
 
 
 async def check_auth(update: Update) -> Employee | None:
@@ -42,17 +42,7 @@ async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     context.user_data["reservation"] = {"items": [], "current_item": {}}
-    await update.message.reply_text("📋 새 예약 등록\n\n고객명을 입력해주세요:")
-    return NAME
-
-
-async def name_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    name = update.message.text.strip()
-    if len(name) < 1 or len(name) > 20:
-        await update.message.reply_text("고객명을 다시 입력해주세요. (1~20자)")
-        return NAME
-    context.user_data["reservation"]["name"] = name
-    await update.message.reply_text("📱 연락처를 입력해주세요:\n(예: 010-1234-5678)")
+    await update.message.reply_text("📋 새 예약 등록\n\n📱 연락처를 입력해주세요:\n(예: 010-1234-5678)")
     return PHONE
 
 
@@ -68,6 +58,7 @@ async def phone_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 포맷팅: 010-1234-5678
     formatted = f"{phone[:3]}-{phone[3:7]}-{phone[7:]}"
     context.user_data["reservation"]["phone"] = formatted
+    context.user_data["reservation"]["name"] = formatted  # 고객명 대신 연락처 사용
     await update.message.reply_text("지역을 선택해주세요:", reply_markup=area_keyboard())
     return AREA
 
@@ -309,7 +300,6 @@ def build_confirm_text(data: dict) -> str:
         "━━━━━━━━━━━━━━\n"
         "📋 예약 확인\n"
         "━━━━━━━━━━━━━━\n"
-        f"고객: {data['name']}\n"
         f"연락처: {data['phone']}\n"
         f"지역: {area}\n"
         f"주소: {data.get('address', '-')}\n"
@@ -364,8 +354,8 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "edit":
         context.user_data["reservation"] = {"items": [], "current_item": {}}
-        await query.edit_message_text("처음부터 다시 입력합니다.\n\n고객명을 입력해주세요:")
-        return NAME
+        await query.edit_message_text("처음부터 다시 입력합니다.\n\n📱 연락처를 입력해주세요:\n(예: 010-1234-5678)")
+        return PHONE
 
     # action == "yes"
     data = context.user_data["reservation"]
@@ -380,7 +370,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"✅ 예약 등록 완료!\n\n"
         f"예약번호: {reservation.reservation_no}\n"
-        f"고객: {data['name']}\n"
+        f"연락처: {data['phone']}\n"
         f"품목: {items_text}\n"
         f"일시: {data['scheduled_date'].strftime('%Y.%m.%d')} {TIME_LABELS[data['scheduled_time']]}\n"
         f"합계: {data['price']:,}원"
@@ -416,7 +406,32 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for r in reservations:
         item_text = format_reservation_items(r)
         status = STATUS_LABELS.get(r.status, r.status)
-        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {r.customer.name} | {item_text} [{status}]"
+        customer_display = r.customer.phone if r.customer else ""
+        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {customer_display} | {item_text} [{status}]"
+
+    await update.message.reply_text(text, reply_markup=reservation_list_keyboard(reservations))
+
+
+async def tomorrow_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    employee = await check_auth(update)
+    if not employee:
+        await update.message.reply_text("먼저 /start 로 등록해주세요.")
+        return
+
+    async with async_session() as db:
+        reservations = await get_tomorrow_reservations(db)
+
+    if not reservations:
+        await update.message.reply_text("내일 예약이 없습니다.")
+        return
+
+    from datetime import date, timedelta
+    tomorrow = date.today() + timedelta(days=1)
+    text = f"━━━━━━━━━━━━━━\n📆 내일 예약 ({tomorrow.strftime('%m/%d')}) — {len(reservations)}건\n━━━━━━━━━━━━━━\n"
+    for r in reservations:
+        item_text = format_reservation_items(r)
+        status = STATUS_LABELS.get(r.status, r.status)
+        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {r.customer.phone if r.customer else ''} | {item_text} [{status}]"
 
     await update.message.reply_text(text, reply_markup=reservation_list_keyboard(reservations))
 
@@ -495,7 +510,6 @@ def get_reservation_handler():
             MessageHandler(filters.Regex(r"^📋 새 예약$"), new_command),
         ],
         states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name_input)],
             PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, phone_input)],
             AREA: [CallbackQueryHandler(area_callback, pattern=r"^area:")],
             ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, address_input)],

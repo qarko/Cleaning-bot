@@ -123,6 +123,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cleaning Business Bot", lifespan=lifespan)
 
+# API 라우터
+from app.api.routes.dashboard import router as dashboard_router
+app.include_router(dashboard_router)
+
 # 랜딩 페이지 (정적 파일)
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -130,6 +134,11 @@ import os
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# 미니앱 프론트엔드
+miniapp_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(miniapp_dir):
+    app.mount("/app", StaticFiles(directory=miniapp_dir, html=True), name="miniapp")
 
 
 @app.get("/")

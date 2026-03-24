@@ -106,17 +106,24 @@ async def seed_pricing():
             return  # 이미 데이터 있음
 
         defaults = [
-            ("carseat", "일반", 40000),
-            ("carseat", "가죽", 50000),
-            ("carseat", "스웨이드", 55000),
-            ("mattress", "싱글", 50000),
-            ("mattress", "더블", 60000),
-            ("mattress", "퀸", 70000),
-            ("mattress", "킹", 80000),
-            ("sofa", "패브릭", 80000),
-            ("sofa", "가죽", 100000),
-            ("sofa", "스웨이드", 110000),
-            ("other", "기타", 0),
+            # 카시트 전제품 동일가
+            ("carseat", "전제품", 40000),
+            # 유모차/웨건
+            ("stroller", "쌍둥이유모차", 50000),
+            ("wagon", "웨건", 50000),
+            # 매트리스 (건식/습식 동일가)
+            ("mattress", "싱글", 40000),
+            ("mattress", "더블", 45000),
+            ("mattress", "퀸", 50000),
+            ("mattress", "킹", 60000),
+            # 소파 (건식/습식 동일가)
+            ("sofa", "2인", 40000),
+            ("sofa", "3인", 50000),
+            ("sofa", "4인", 60000),
+            ("sofa", "5인", 70000),
+            # 아기띠
+            ("carrier", "단독", 20000),
+            ("carrier", "카시트/유모차 동시", 10000),
         ]
         for item_type, subtype, price in defaults:
             db.add(Pricing(item_type=item_type, item_subtype=subtype, price=price, is_active=True))

@@ -51,6 +51,8 @@ async def create_reservation(db: AsyncSession, data: dict) -> Reservation:
         scheduled_date=data["scheduled_date"],
         scheduled_time=data["scheduled_time"],
         pickup_address=data.get("address"),
+        cleaning_method=data.get("cleaning_method"),
+        area=data.get("area"),
         special_notes=data.get("special_notes"),
         status="pending",
         price=data.get("price", 0),
@@ -136,7 +138,8 @@ async def settle_reservation(db: AsyncSession, reservation_no: str, method: str)
     return payment
 
 
-async def get_price(db: AsyncSession, item_type: str, item_subtype: str = None) -> int:
+async def get_price(db: AsyncSession, item_type: str, item_subtype: str = None, cleaning_method: str = None) -> int:
+    # 건식/습식 동일가이므로 method는 참고용, subtype으로 가격 조회
     query = select(Pricing).where(Pricing.item_type == item_type, Pricing.is_active == True)
     if item_subtype:
         query = query.where(Pricing.item_subtype == item_subtype)

@@ -1,6 +1,6 @@
 from telegram import Bot
 from app.config import GROUP_CHAT_ID
-from app.bot.keyboards import ITEM_LABELS, TIME_LABELS, STATUS_LABELS
+from app.bot.keyboards import ITEM_LABELS, TIME_LABELS, STATUS_LABELS, METHOD_LABELS, AREA_LABELS
 
 
 async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
@@ -9,7 +9,10 @@ async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
 
     item = ITEM_LABELS.get(data["item_type"], data["item_type"])
     subtype = data.get("item_subtype", "")
-    subtype_str = f" ({subtype})" if subtype else ""
+    subtype_str = f" {subtype}" if subtype else ""
+    method = data.get("cleaning_method")
+    method_str = f" {METHOD_LABELS.get(method, '')}" if method else ""
+    area = AREA_LABELS.get(data.get("area", ""), "")
     notes = data.get("special_notes") or "없음"
     price = data.get("price", 0)
 
@@ -19,8 +22,9 @@ async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
         f"━━━━━━━━━━━━━━\n"
         f"고객: {data['name']}\n"
         f"연락처: {data['phone']}\n"
+        f"지역: {area}\n"
         f"주소: {data.get('address', '-')}\n"
-        f"품목: {item}{subtype_str} x {data.get('quantity', 1)}\n"
+        f"품목: {item}{subtype_str}{method_str} x {data.get('quantity', 1)}\n"
         f"일시: {data['scheduled_date'].strftime('%Y.%m.%d')} {TIME_LABELS[data['scheduled_time']]}\n"
         f"특이사항: {notes}\n"
         f"금액: {price:,}원\n"

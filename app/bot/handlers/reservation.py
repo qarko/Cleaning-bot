@@ -15,12 +15,14 @@ from app.bot.keyboards import (
     item_type_keyboard, item_subtype_keyboard, quantity_keyboard,
     date_keyboard, time_keyboard, special_notes_keyboard, confirm_keyboard,
     reservation_action_keyboard, reservation_list_keyboard,
-    ITEM_LABELS, TIME_LABELS, STATUS_LABELS,
+    cleaning_method_keyboard, area_keyboard,
+    ITEM_LABELS, TIME_LABELS, STATUS_LABELS, METHOD_LABELS, AREA_LABELS,
+    CLEANING_METHOD_ITEMS,
 )
 from app.bot.notifications import notify_group_new_reservation
 
 # Conversation states
-NAME, PHONE, ADDRESS, ITEM_TYPE, ITEM_SUBTYPE, QUANTITY, QUANTITY_INPUT, DATE, TIME, NOTES, CONFIRM = range(11)
+NAME, PHONE, AREA, ADDRESS, ITEM_TYPE, ITEM_SUBTYPE, CLEANING_METHOD, QUANTITY, QUANTITY_INPUT, DATE, TIME, NOTES, CONFIRM = range(13)
 
 
 async def check_auth(update: Update) -> Employee | None:
@@ -52,13 +54,37 @@ async def name_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def phone_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["reservation"]["phone"] = update.message.text.strip()
-    await update.message.reply_text("주소를 입력해주세요:")
+    await update.message.reply_text("지역을 선택해주세요:", reply_markup=area_keyboard())
+    return AREA
+
+
+async def area_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    area = query.data.split(":")[1]
+    context.user_data["reservation"]["area"] = area
+    area_label = AREA_LABELS.get(area, area)
+    await query.edit_message_text(f"지역: {area_label}\n\n상세 주소를 입력해주세요:")
     return ADDRESS
 
 
 async def address_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["reservation"]["address"] = update.message.text.strip()
-    await update.message.reply_text("품목을 선택해주세요:", reply_markup=item_type_keyboard())
+    await update.message.reply_text(
+        "━━━━━━━━━━━━━━\n"
+        "올그린 대전점 가격표\n"
+        "━━━━━━━━━━━━━━\n"
+        "카시트 전제품 4만원\n"
+        "쌍둥이유모차 5만원\n"
+        "웨건 5만원\n"
+        "매트리스 4~6만원\n"
+        "소파 4~7만원\n"
+        "아기띠 2만/1만원\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "품목을 선택해주세요:",
+        reply_markup=item_type_keyboard(),
+    )
     return ITEM_TYPE
 
 
@@ -71,14 +97,17 @@ async def item_type_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     subtype_kb = item_subtype_keyboard(item_type)
     if subtype_kb:
-        await query.edit_message_text(
-            f"품목: {ITEM_LABELS[item_type]}\n\n종류를 선택해주세요:",
-            reply_markup=subtype_kb,
-        )
+        label = ITEM_LABELS[item_type]
+        await query.edit_message_text(f"품목: {label}\n\n사이즈를 선택해주세요:", reply_markup=subtype_kb)
         return ITEM_SUBTYPE
-    else:
-        await query.edit_message_text("수량을 선택해주세요:", reply_markup=quantity_keyboard())
-        return QUANTITY
+
+    # 사이즈 선택 불필요 → 세척방식 or 수량
+    if item_type in CLEANING_METHOD_ITEMS:
+        await query.edit_message_text("세척 방식을 선택해주세요:", reply_markup=cleaning_method_keyboard())
+        return CLEANING_METHOD
+
+    await query.edit_message_text("수량을 선택해주세요:", reply_markup=quantity_keyboard())
+    return QUANTITY
 
 
 async def item_subtype_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,6 +116,24 @@ async def item_subtype_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     subtype = query.data.split(":")[1]
     context.user_data["reservation"]["item_subtype"] = subtype
+
+    item_type = context.user_data["reservation"]["item_type"]
+
+    # 매트리스/소파는 세척방식 선택 필요
+    if item_type in CLEANING_METHOD_ITEMS:
+        await query.edit_message_text("세척 방식을 선택해주세요:", reply_markup=cleaning_method_keyboard())
+        return CLEANING_METHOD
+
+    await query.edit_message_text("수량을 선택해주세요:", reply_markup=quantity_keyboard())
+    return QUANTITY
+
+
+async def cleaning_method_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    method = query.data.split(":")[1]
+    context.user_data["reservation"]["cleaning_method"] = method
     await query.edit_message_text("수량을 선택해주세요:", reply_markup=quantity_keyboard())
     return QUANTITY
 
@@ -156,64 +203,54 @@ async def notes_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await show_confirm_msg(update, context)
 
 
-async def show_confirm(query, context):
-    data = context.user_data["reservation"]
-
-    # 견적 계산
-    async with async_session() as db:
-        price = await get_price(db, data["item_type"], data.get("item_subtype"))
-    total = price * data.get("quantity", 1)
-    data["price"] = total
-
+def build_confirm_text(data: dict) -> str:
     item_label = ITEM_LABELS.get(data["item_type"], data["item_type"])
     subtype = data.get("item_subtype", "")
-    subtype_str = f" ({subtype})" if subtype else ""
+    subtype_str = f" {subtype}" if subtype else ""
+    method = data.get("cleaning_method")
+    method_str = f" {METHOD_LABELS.get(method, '')}" if method else ""
     notes = data.get("special_notes") or "없음"
+    area = AREA_LABELS.get(data.get("area", ""), "")
+    total = data.get("price", 0)
 
-    text = (
+    return (
         "━━━━━━━━━━━━━━\n"
         "📋 예약 확인\n"
         "━━━━━━━━━━━━━━\n"
         f"고객: {data['name']}\n"
         f"연락처: {data['phone']}\n"
+        f"지역: {area}\n"
         f"주소: {data.get('address', '-')}\n"
-        f"품목: {item_label}{subtype_str} x {data.get('quantity', 1)}\n"
+        f"품목: {item_label}{subtype_str}{method_str} x {data.get('quantity', 1)}\n"
         f"일시: {data['scheduled_date'].strftime('%Y.%m.%d')} {TIME_LABELS[data['scheduled_time']]}\n"
         f"특이사항: {notes}\n"
         f"금액: {total:,}원\n"
         "━━━━━━━━━━━━━━"
     )
-    await query.edit_message_text(text, reply_markup=confirm_keyboard())
+
+
+async def calc_price(data: dict) -> int:
+    async with async_session() as db:
+        price = await get_price(
+            db,
+            data["item_type"],
+            data.get("item_subtype"),
+            data.get("cleaning_method"),
+        )
+    return price * data.get("quantity", 1)
+
+
+async def show_confirm(query, context):
+    data = context.user_data["reservation"]
+    data["price"] = await calc_price(data)
+    await query.edit_message_text(build_confirm_text(data), reply_markup=confirm_keyboard())
     return CONFIRM
 
 
 async def show_confirm_msg(update, context):
     data = context.user_data["reservation"]
-
-    async with async_session() as db:
-        price = await get_price(db, data["item_type"], data.get("item_subtype"))
-    total = price * data.get("quantity", 1)
-    data["price"] = total
-
-    item_label = ITEM_LABELS.get(data["item_type"], data["item_type"])
-    subtype = data.get("item_subtype", "")
-    subtype_str = f" ({subtype})" if subtype else ""
-    notes = data.get("special_notes") or "없음"
-
-    text = (
-        "━━━━━━━━━━━━━━\n"
-        "📋 예약 확인\n"
-        "━━━━━━━━━━━━━━\n"
-        f"고객: {data['name']}\n"
-        f"연락처: {data['phone']}\n"
-        f"주소: {data.get('address', '-')}\n"
-        f"품목: {item_label}{subtype_str} x {data.get('quantity', 1)}\n"
-        f"일시: {data['scheduled_date'].strftime('%Y.%m.%d')} {TIME_LABELS[data['scheduled_time']]}\n"
-        f"특이사항: {notes}\n"
-        f"금액: {total:,}원\n"
-        "━━━━━━━━━━━━━━"
-    )
-    await update.message.reply_text(text, reply_markup=confirm_keyboard())
+    data["price"] = await calc_price(data)
+    await update.message.reply_text(build_confirm_text(data), reply_markup=confirm_keyboard())
     return CONFIRM
 
 
@@ -278,7 +315,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for r in reservations:
         item = ITEM_LABELS.get(r.item_type, r.item_type)
         status = STATUS_LABELS.get(r.status, r.status)
-        text += f"\n{TIME_LABELS[r.scheduled_time]} | {r.customer.name} | {item} x{r.quantity} [{status}]"
+        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {r.customer.name} | {item} x{r.quantity} [{status}]"
 
     await update.message.reply_text(text, reply_markup=reservation_list_keyboard(reservations))
 
@@ -313,7 +350,7 @@ async def view_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     item = ITEM_LABELS.get(r.item_type, r.item_type)
-    subtype = f" ({r.item_subtype})" if r.item_subtype else ""
+    subtype = f" {r.item_subtype}" if r.item_subtype else ""
     status = STATUS_LABELS.get(r.status, r.status)
     notes = r.special_notes or "없음"
 
@@ -340,9 +377,11 @@ def get_reservation_handler():
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name_input)],
             PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, phone_input)],
+            AREA: [CallbackQueryHandler(area_callback, pattern=r"^area:")],
             ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, address_input)],
             ITEM_TYPE: [CallbackQueryHandler(item_type_callback, pattern=r"^item:")],
             ITEM_SUBTYPE: [CallbackQueryHandler(item_subtype_callback, pattern=r"^subtype:")],
+            CLEANING_METHOD: [CallbackQueryHandler(cleaning_method_callback, pattern=r"^method:")],
             QUANTITY: [CallbackQueryHandler(quantity_callback, pattern=r"^qty:")],
             QUANTITY_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, quantity_input)],
             DATE: [CallbackQueryHandler(date_callback, pattern=r"^date")],

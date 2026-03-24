@@ -17,6 +17,8 @@ class Reservation(Base):
     scheduled_time: Mapped[str] = mapped_column(String(10))  # morning/afternoon/evening
     pickup_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cleaning_method: Mapped[str | None] = mapped_column(String(10), nullable=True)  # dry/wet
+    area: Mapped[str | None] = mapped_column(String(20), nullable=True)
     special_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     price: Mapped[int] = mapped_column(Integer, default=0)

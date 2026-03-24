@@ -62,7 +62,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             r = await update_reservation_status(db, reservation_no, "cancelled")
         if r:
             await query.edit_message_text(f"❌ {reservation_no} 예약이 취소되었습니다.")
-            await notify_group_status_change(context.bot, r, "cancelled", employee.name)
+            await notify_group_status_change(context.bot, r, "cancelled", employee.name, sender_role=employee.role)
         return
 
     # 확정
@@ -76,7 +76,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"고객: {r.customer.name} | {item} x{r.quantity}",
                 reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
             )
-            await notify_group_status_change(context.bot, r, "confirmed", employee.name)
+            await notify_group_status_change(context.bot, r, "confirmed", employee.name, sender_role=employee.role)
         return
 
     # 사진이 필요한 단계인지 확인
@@ -86,6 +86,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "reservation_no": reservation_no,
             "employee_id": employee.id,
             "employee_name": employee.name,
+            "employee_role": employee.role,
         }
         await query.edit_message_text(
             f"📸 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)",
@@ -101,7 +102,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ {reservation_no} → {status_label}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
         )
-        await notify_group_status_change(context.bot, r, action, employee.name)
+        await notify_group_status_change(context.bot, r, action, employee.name, sender_role=employee.role)
 
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -133,7 +134,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ {reservation_no} → {status_label}{photo_text}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
         )
-        await notify_group_status_change(context.bot, r, status, pending["employee_name"])
+        await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
 
     context.user_data.pop("pending_action", None)
 
@@ -160,7 +161,7 @@ async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"✅ {reservation_no} → {status_label}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
         )
-        await notify_group_status_change(context.bot, r, status, pending["employee_name"])
+        await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
 
     context.user_data.pop("pending_action", None)
 

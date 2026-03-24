@@ -209,3 +209,22 @@ PAYMENT_LABELS = {
     "card": "카드",
     "naver": "네이버예약",
 }
+
+
+def main_menu_keyboard(role: str = "boss"):
+    """메인 메뉴 버튼 (ReplyKeyboard)"""
+    from telegram import ReplyKeyboardMarkup, KeyboardButton
+
+    if role == "boss":
+        keyboard = [
+            [KeyboardButton("📋 새 예약"), KeyboardButton("📅 오늘 예약")],
+            [KeyboardButton("📝 전체 예약"), KeyboardButton("📌 할 일")],
+            [KeyboardButton("💰 견적 계산"), KeyboardButton("👤 고객 조회")],
+        ]
+    else:
+        keyboard = [
+            [KeyboardButton("📅 오늘 예약"), KeyboardButton("📌 할 일")],
+            [KeyboardButton("📝 전체 예약")],
+        ]
+
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)

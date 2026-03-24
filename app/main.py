@@ -13,6 +13,7 @@ from app.bot.handlers.reservation import get_reservation_handler, today_command,
 from app.bot.handlers.task import action_callback, photo_handler, skip_photo_handler, payment_callback, mytasks_command
 from app.bot.handlers.quote import quote_command, quote_item_callback, quote_subtype_callback, quote_method_callback, quote_qty_callback
 from app.bot.handlers.customer import customer_command
+from app.bot.handlers.menu import menu_handler
 from app.bot.notifications import send_daily_schedule
 
 logging.basicConfig(level=logging.INFO)
@@ -53,6 +54,12 @@ async def lifespan(app: FastAPI):
     bot_app.add_handler(CallbackQueryHandler(quote_subtype_callback, pattern=r"^q_sub:"))
     bot_app.add_handler(CallbackQueryHandler(quote_method_callback, pattern=r"^q_method:"))
     bot_app.add_handler(CallbackQueryHandler(quote_qty_callback, pattern=r"^q_qty:"))
+
+    # 메뉴 버튼 핸들러 (ReplyKeyboard 텍스트)
+    bot_app.add_handler(MessageHandler(
+        filters.Regex(r"^(📋 새 예약|📅 오늘 예약|📝 전체 예약|📌 할 일|💰 견적 계산|👤 고객 조회)$"),
+        menu_handler,
+    ))
 
     # 사진 핸들러 (업무 처리 - 사진 업로드 대기 중일 때만)
     bot_app.add_handler(MessageHandler(filters.PHOTO, photo_handler))

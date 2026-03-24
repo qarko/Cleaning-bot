@@ -18,14 +18,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if employee:
         role_label = "사장" if employee.role == "boss" else "직원"
+        from app.bot.keyboards import main_menu_keyboard
         await update.message.reply_text(
-            f"안녕하세요, {employee.name}님! ({role_label})\n\n"
-            "📋 /new - 새 예약 등록\n"
-            "📅 /today - 오늘 예약\n"
-            "📝 /list - 전체 예약\n"
-            "💰 /quote - 견적 계산\n"
-            "👤 /customer - 고객 조회\n"
-            "📌 /mytasks - 내 할 일"
+            f"안녕하세요, {employee.name}님! ({role_label})",
+            reply_markup=main_menu_keyboard(employee.role),
         )
         return ConversationHandler.END
 
@@ -77,14 +73,10 @@ async def invite_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await db.commit()
 
     role_label = "사장" if role == "boss" else "직원"
+    from app.bot.keyboards import main_menu_keyboard
     await update.message.reply_text(
-        f"등록 완료! {name}님 ({role_label})\n\n"
-        "📋 /new - 새 예약 등록\n"
-        "📅 /today - 오늘 예약\n"
-        "📝 /list - 전체 예약\n"
-        "💰 /quote - 견적 계산\n"
-        "👤 /customer - 고객 조회\n"
-        "📌 /mytasks - 내 할 일"
+        f"등록 완료! {name}님 ({role_label})",
+        reply_markup=main_menu_keyboard(role),
     )
     return ConversationHandler.END
 

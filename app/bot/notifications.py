@@ -1,6 +1,9 @@
 from telegram import Bot
 from sqlalchemy import select
-from app.bot.keyboards import ITEM_LABELS, TIME_LABELS, STATUS_LABELS, METHOD_LABELS, AREA_LABELS
+from app.bot.keyboards import (
+    ITEM_LABELS, TIME_LABELS, STATUS_LABELS, METHOD_LABELS, AREA_LABELS,
+    reservation_action_keyboard,
+)
 
 
 async def get_employees_by_role(role: str = None):
@@ -16,38 +19,49 @@ async def get_employees_by_role(role: str = None):
         return list(result.scalars().all())
 
 
-async def notify_staff(bot: Bot, text: str):
+async def notify_staff(bot: Bot, text: str, reply_markup=None):
     """직원에게 DM 발송"""
     staff_list = await get_employees_by_role("staff")
     for emp in staff_list:
         try:
-            await bot.send_message(chat_id=emp.telegram_user_id, text=text)
+            await bot.send_message(chat_id=emp.telegram_user_id, text=text, reply_markup=reply_markup)
         except Exception:
             pass
 
 
-async def notify_boss(bot: Bot, text: str):
+async def notify_boss(bot: Bot, text: str, reply_markup=None):
     """사장에게 DM 발송"""
     boss_list = await get_employees_by_role("boss")
     for emp in boss_list:
         try:
-            await bot.send_message(chat_id=emp.telegram_user_id, text=text)
+            await bot.send_message(chat_id=emp.telegram_user_id, text=text, reply_markup=reply_markup)
         except Exception:
             pass
 
 
-async def notify_all(bot: Bot, text: str):
+async def notify_all(bot: Bot, text: str, reply_markup=None):
     """사장+직원 모두에게 DM 발송"""
     all_employees = await get_employees_by_role()
     for emp in all_employees:
         try:
-            await bot.send_message(chat_id=emp.telegram_user_id, text=text)
+            await bot.send_message(chat_id=emp.telegram_user_id, text=text, reply_markup=reply_markup)
+        except Exception:
+            pass
+
+
+async def notify_other_role(bot: Bot, sender_role: str, text: str, reply_markup=None):
+    """발신자 반대 역할에게 알림 (사장→직원, 직원→사장)"""
+    target_role = "staff" if sender_role == "boss" else "boss"
+    employees = await get_employees_by_role(target_role)
+    for emp in employees:
+        try:
+            await bot.send_message(chat_id=emp.telegram_user_id, text=text, reply_markup=reply_markup)
         except Exception:
             pass
 
 
 async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
-    """새 예약 → 직원에게 알림"""
+    """새 예약 → 직원에게 알림 (액션 버튼 포함)"""
     item = ITEM_LABELS.get(data["item_type"], data["item_type"])
     subtype = data.get("item_subtype", "")
     subtype_str = f" {subtype}" if subtype else ""
@@ -71,21 +85,38 @@ async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
         f"금액: {price:,}원\n"
         f"━━━━━━━━━━━━━━"
     )
-    # 사장이 등록 → 직원에게 알림
-    await notify_staff(bot, text)
+    # 직원에게 액션 버튼과 함께 전송
+    await notify_staff(
+        bot, text,
+        reply_markup=reservation_action_keyboard(reservation.reservation_no, reservation.status),
+    )
 
 
-async def notify_group_status_change(bot: Bot, reservation, new_status: str, employee_name: str = ""):
-    """상태 변경 → 상대방에게 알림 (직원→사장, 사장→직원)"""
+async def notify_group_status_change(bot: Bot, reservation, new_status: str, employee_name: str = "", sender_role: str = ""):
+    """상태 변경 → 상대방에게 알림 (액션 버튼 포함)"""
     item = ITEM_LABELS.get(reservation.item_type, reservation.item_type)
     status_label = STATUS_LABELS.get(new_status, new_status)
 
     from datetime import datetime
     now = datetime.now().strftime("%H:%M")
 
+    # 상태별 이모지
+    status_emoji = {
+        "confirmed": "✅",
+        "picking_up": "🚗",
+        "picked_up": "📦",
+        "cleaning": "🧹",
+        "cleaned": "✨",
+        "delivering": "🚚",
+        "delivered": "🏠",
+        "settled": "💰",
+        "cancelled": "❌",
+    }
+    emoji = status_emoji.get(new_status, "🔄")
+
     text = (
         f"━━━━━━━━━━━━━━\n"
-        f"🔄 [{status_label}] {reservation.reservation_no}\n"
+        f"{emoji} [{status_label}] {reservation.reservation_no}\n"
         f"━━━━━━━━━━━━━━\n"
         f"고객: {reservation.customer.name} | {item} x{reservation.quantity}\n"
         f"처리: {employee_name}\n"
@@ -93,17 +124,17 @@ async def notify_group_status_change(bot: Bot, reservation, new_status: str, emp
         f"━━━━━━━━━━━━━━"
     )
 
-    # 업무 완료 단계(수거/세척/배송 완료)는 사장에게 알림
-    boss_notify_statuses = {"picked_up", "cleaned", "delivered", "settled"}
-    # 예약 확정/출발 등은 직원에게 알림
-    staff_notify_statuses = {"confirmed", "picking_up", "cleaning", "delivering"}
+    # 다음 액션 버튼 포함
+    next_action_kb = None
+    if new_status not in ("settled", "cancelled"):
+        next_action_kb = reservation_action_keyboard(reservation.reservation_no, new_status)
 
-    if new_status in boss_notify_statuses:
-        await notify_boss(bot, text)
-    elif new_status in staff_notify_statuses:
-        await notify_staff(bot, text)
+    # 상대방에게 알림 전송
+    if sender_role:
+        await notify_other_role(bot, sender_role, text, reply_markup=next_action_kb)
     else:
-        await notify_all(bot, text)
+        # sender_role 모르면 모두에게
+        await notify_all(bot, text, reply_markup=next_action_kb)
 
 
 async def send_daily_schedule(bot: Bot):

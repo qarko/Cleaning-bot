@@ -11,7 +11,7 @@ from app.database import init_db
 from app.bot.handlers.start import get_start_handler
 from app.bot.handlers.reservation import get_reservation_handler, today_command, list_command, view_callback
 from app.bot.handlers.task import action_callback, photo_handler, skip_photo_handler, payment_callback, mytasks_command
-from app.bot.handlers.quote import quote_command, quote_item_callback, quote_subtype_callback, quote_qty_callback
+from app.bot.handlers.quote import quote_command, quote_item_callback, quote_subtype_callback, quote_method_callback, quote_qty_callback
 from app.bot.handlers.customer import customer_command
 from app.bot.notifications import send_daily_schedule
 
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     # 텔레그램 봇 설정
     bot_app = Application.builder().token(BOT_TOKEN).build()
 
-    # 핸들러 등록
+    # 핸들러 등록 (순서 중요: ConversationHandler가 먼저)
     bot_app.add_handler(get_start_handler())
     bot_app.add_handler(get_reservation_handler())
     bot_app.add_handler(CommandHandler("today", today_command))
@@ -45,20 +45,22 @@ async def lifespan(app: FastAPI):
     bot_app.add_handler(CommandHandler("quote", quote_command))
     bot_app.add_handler(CommandHandler("customer", customer_command))
 
-    # 콜백 핸들러 (순서 중요)
+    # 콜백 핸들러 (견적은 q_ 접두사로 구분)
     bot_app.add_handler(CallbackQueryHandler(view_callback, pattern=r"^view:"))
     bot_app.add_handler(CallbackQueryHandler(action_callback, pattern=r"^action:"))
     bot_app.add_handler(CallbackQueryHandler(payment_callback, pattern=r"^pay:"))
-    bot_app.add_handler(CallbackQueryHandler(quote_item_callback, pattern=r"^item:"))
-    bot_app.add_handler(CallbackQueryHandler(quote_subtype_callback, pattern=r"^subtype:"))
-    bot_app.add_handler(CallbackQueryHandler(quote_qty_callback, pattern=r"^qty:"))
+    bot_app.add_handler(CallbackQueryHandler(quote_item_callback, pattern=r"^q_item:"))
+    bot_app.add_handler(CallbackQueryHandler(quote_subtype_callback, pattern=r"^q_sub:"))
+    bot_app.add_handler(CallbackQueryHandler(quote_method_callback, pattern=r"^q_method:"))
+    bot_app.add_handler(CallbackQueryHandler(quote_qty_callback, pattern=r"^q_qty:"))
 
-    # 사진 핸들러 (업무 처리용)
+    # 사진 핸들러 (업무 처리 - 사진 업로드 대기 중일 때만)
     bot_app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    # 사진 건너뛰기 핸들러 - pending_action이 있을 때만 동작하므로 안전
     bot_app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.Regex(r"^(?!.*\d{2,})"),
+        filters.TEXT & ~filters.COMMAND,
         skip_photo_handler,
-    ))
+    ), group=1)  # group=1로 분리하여 ConversationHandler와 충돌 방지
 
     # 봇 시작
     await bot_app.initialize()

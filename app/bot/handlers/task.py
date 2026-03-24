@@ -139,9 +139,10 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """사진 건너뛰기 - pending_action이 있을 때만 동작"""
     pending = context.user_data.get("pending_action")
     if not pending:
-        return
+        return  # pending_action이 없으면 무시
 
     reservation_no = pending["reservation_no"]
     status = pending["status"]

@@ -14,7 +14,6 @@ from app.bot.keyboards import (
     ITEM_LABELS, TIME_LABELS, STATUS_LABELS, PAYMENT_LABELS,
 )
 from app.bot.notifications import notify_group_status_change
-from app.config import GROUP_CHAT_ID
 
 # 상태 변경 매핑
 STATUS_STAGE_MAP = {

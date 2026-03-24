@@ -10,7 +10,7 @@ from app.config import BOT_TOKEN
 from app.database import init_db
 from app.bot.handlers.start import get_start_handler
 from app.bot.handlers.reservation import get_reservation_handler, today_command, tomorrow_command, list_command, view_callback
-from app.bot.handlers.task import action_callback, photo_handler, skip_photo_handler, payment_callback, mytasks_command
+from app.bot.handlers.task import action_callback, photo_handler, skip_photo_handler, payment_callback, delivery_date_callback, mytasks_command
 from app.bot.handlers.quote import quote_command, quote_item_callback, quote_subtype_callback, quote_method_callback, quote_qty_callback
 from app.bot.handlers.customer import customer_command
 from app.bot.handlers.menu import menu_handler
@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
 
     # 콜백 핸들러 (견적은 q_ 접두사로 구분)
     bot_app.add_handler(CallbackQueryHandler(view_callback, pattern=r"^view:"))
+    bot_app.add_handler(CallbackQueryHandler(delivery_date_callback, pattern=r"^date"))  # 배송 예정일 (pending_action 체크)
     bot_app.add_handler(CallbackQueryHandler(action_callback, pattern=r"^action:"))
     bot_app.add_handler(CallbackQueryHandler(payment_callback, pattern=r"^pay:"))
     bot_app.add_handler(CallbackQueryHandler(quote_item_callback, pattern=r"^q_item:"))
@@ -106,7 +107,7 @@ async def lifespan(app: FastAPI):
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(
         lambda: asyncio.create_task(send_daily_schedule(bot_app.bot)),
-        trigger=CronTrigger(hour=8, minute=0),
+        trigger=CronTrigger(hour=9, minute=0),
         id="daily_schedule",
     )
     scheduler.start()

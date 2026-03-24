@@ -203,7 +203,11 @@ def payment_method_keyboard(reservation_no: str):
 def reservation_list_keyboard(reservations):
     buttons = []
     for r in reservations:
-        label = f"{r.reservation_no} | {r.customer.name} | {ITEM_LABELS.get(r.item_type, r.item_type)}"
+        display = r.pickup_address or (r.customer.name if r.customer else "")
+        # 주소가 길면 앞 15자만
+        if len(display) > 15:
+            display = display[:15] + "…"
+        label = f"{r.reservation_no} | {display}"
         buttons.append([InlineKeyboardButton(label, callback_data=f"view:{r.reservation_no}")])
     return InlineKeyboardMarkup(buttons)
 

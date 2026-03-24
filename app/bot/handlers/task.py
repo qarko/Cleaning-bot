@@ -105,15 +105,26 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "employee_name": employee.name,
             "employee_role": employee.role,
         }
-        # 세척완료 시 특이사항 입력 안내 추가
+        # 세척완료 시 배송 예정일 선택으로 분기
         if action == "cleaned":
+            context.user_data["pending_action"] = {
+                "status": action,
+                "reservation_no": reservation_no,
+                "employee_id": employee.id,
+                "employee_name": employee.name,
+                "employee_role": employee.role,
+                "step": "delivery_date",
+            }
+            from app.bot.keyboards import date_keyboard
             await query.edit_message_text(
-                f"📸 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)\n\n💡 특이사항이 있으면 사진과 함께 또는 텍스트로 입력해주세요.",
+                "📦 배송 예정일을 선택해주세요:",
+                reply_markup=date_keyboard(),
             )
-        else:
-            await query.edit_message_text(
-                f"📸 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)",
-            )
+            return
+
+        await query.edit_message_text(
+            f"📸 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)",
+        )
         return
 
     # 사진 불필요한 상태 변경
@@ -153,8 +164,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if r:
         status_label = STATUS_LABELS.get(status, status)
         photo_text = " (사진 첨부)" if photo_url else ""
+        delivery_text = ""
+        if pending.get("delivery_date"):
+            delivery_text = f"\n📦 배송 예정: {pending['delivery_date']}"
         await update.message.reply_text(
-            f"✅ {reservation_no} → {status_label}{photo_text}",
+            f"✅ {reservation_no} → {status_label}{photo_text}{delivery_text}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
         )
         await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
@@ -181,13 +195,42 @@ async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if r:
         status_label = STATUS_LABELS.get(status, status)
+        delivery_text = ""
+        if pending.get("delivery_date"):
+            delivery_text = f"\n📦 배송 예정: {pending['delivery_date']}"
+        memo_text = f"\n메모: {memo}" if memo else ""
         await update.message.reply_text(
-            f"✅ {reservation_no} → {status_label}",
+            f"✅ {reservation_no} → {status_label}{delivery_text}{memo_text}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
         )
         await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
 
     context.user_data.pop("pending_action", None)
+
+
+async def delivery_date_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """세척 완료 후 배송 예정일 선택"""
+    query = update.callback_query
+    await query.answer()
+
+    pending = context.user_data.get("pending_action")
+    if not pending or pending.get("step") != "delivery_date":
+        return
+
+    if query.data.startswith("date_next:"):
+        from app.bot.keyboards import date_keyboard
+        from datetime import datetime
+        next_date = datetime.strptime(query.data.split(":")[1], "%Y-%m-%d")
+        await query.edit_message_text("📦 배송 예정일을 선택해주세요:", reply_markup=date_keyboard(next_date))
+        return
+
+    date_str = query.data.split(":")[1]
+    pending["delivery_date"] = date_str
+    pending["step"] = "photo"
+
+    await query.edit_message_text(
+        f"배송 예정일: {date_str}\n\n📸 세척 완료 사진을 업로드해주세요.\n(건너뛰려면 아무 텍스트 입력)\n\n💡 특이사항이 있으면 함께 입력해주세요.",
+    )
 
 
 async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -213,49 +213,61 @@ async def notify_group_status_change(bot: Bot, reservation, new_status: str, emp
 
 
 async def send_daily_schedule(bot: Bot):
-    """매일 아침 오늘의 일정 → 사장+직원 모두에게 발송"""
+    """매일 아침 9시 오늘 할 일 요약 → 대표+관리자 모두에게 발송"""
     from app.database import async_session
-    from app.services.reservation_service import get_today_reservations
+    from app.services.reservation_service import get_today_reservations, get_all_reservations
     from datetime import date
-
-    async with async_session() as db:
-        reservations = await get_today_reservations(db)
 
     today = date.today().strftime("%Y.%m.%d")
 
-    if not reservations:
-        text = (
-            f"━━━━━━━━━━━━━━\n"
-            f"📅 [오늘의 일정] {today}\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"오늘 예약이 없습니다.\n"
-            f"━━━━━━━━━━━━━━"
-        )
-    else:
-        text = (
-            f"━━━━━━━━━━━━━━\n"
-            f"📅 [오늘의 일정] {today}\n"
-            f"━━━━━━━━━━━━━━\n"
-        )
-        for idx, r in enumerate(reservations, 1):
-            items_text = ""
-            if r.items_json:
-                try:
-                    items = json.loads(r.items_json)
-                    items_text = ", ".join(
-                        f"{ITEM_LABELS.get(i['item_type'], i['item_type'])} x{i.get('quantity', 1)}"
-                        for i in items
-                    )
-                except Exception:
-                    items_text = ITEM_LABELS.get(r.item_type, r.item_type)
-            else:
-                items_text = f"{ITEM_LABELS.get(r.item_type, r.item_type)} x{r.quantity}"
+    async with async_session() as db:
+        today_reservations = await get_today_reservations(db)
+        all_active = await get_all_reservations(db, limit=50)
 
-            time_label = TIME_LABELS.get(r.scheduled_time, "")
-            status = STATUS_LABELS.get(r.status, r.status)
-            text += f"{idx}. {time_label} {r.customer.name} - {items_text} [{status}]\n"
+    # 카테고리 분류
+    pickup_list = [r for r in today_reservations if r.status in ("confirmed", "pending")]
+    cleaning_list = [r for r in all_active if r.status in ("picked_up", "cleaning")]
+    delivery_list = [r for r in all_active if r.status in ("cleaned", "delivering")]
 
-        text += "━━━━━━━━━━━━━━"
+    def fmt(r):
+        display = r.pickup_address or (r.customer.phone if r.customer else "")
+        if len(display) > 15:
+            display = display[:15] + "…"
+        if r.items_json:
+            try:
+                items = json.loads(r.items_json)
+                items_text = ", ".join(
+                    f"{ITEM_LABELS.get(i['item_type'], i['item_type'])} x{i.get('quantity', 1)}"
+                    for i in items
+                )
+            except Exception:
+                items_text = ITEM_LABELS.get(r.item_type, r.item_type)
+        else:
+            items_text = f"{ITEM_LABELS.get(r.item_type, r.item_type)} x{r.quantity}"
+        return f"{display} - {items_text}"
+
+    text = f"━━━━━━━━━━━━━━\n📋 [오늘 할 일] {today}\n━━━━━━━━━━━━━━\n"
+
+    if pickup_list:
+        text += f"\n🚗 수거 예정 ({len(pickup_list)}건)\n"
+        for i, r in enumerate(pickup_list, 1):
+            text += f"  {i}. {TIME_LABELS.get(r.scheduled_time, '')} {fmt(r)}\n"
+
+    if cleaning_list:
+        text += f"\n🧹 세척 대기 ({len(cleaning_list)}건)\n"
+        for i, r in enumerate(cleaning_list, 1):
+            text += f"  {i}. {fmt(r)}\n"
+
+    if delivery_list:
+        text += f"\n🚚 배송 대기 ({len(delivery_list)}건)\n"
+        for i, r in enumerate(delivery_list, 1):
+            text += f"  {i}. {fmt(r)}\n"
+
+    if not pickup_list and not cleaning_list and not delivery_list:
+        text += "\n오늘 할 일이 없습니다!\n"
+
+    total = len(pickup_list) + len(cleaning_list) + len(delivery_list)
+    text += f"\n━━━━━━━━━━━━━━\n총 {total}건"
 
     all_employees = await get_employees_by_role()
     for emp in all_employees:

@@ -58,7 +58,7 @@ async def phone_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 포맷팅: 010-1234-5678
     formatted = f"{phone[:3]}-{phone[3:7]}-{phone[7:]}"
     context.user_data["reservation"]["phone"] = formatted
-    context.user_data["reservation"]["name"] = formatted  # 고객명 대신 연락처 사용
+    context.user_data["reservation"]["name"] = formatted  # 나중에 주소로 덮어씀
     await update.message.reply_text("지역을 선택해주세요:", reply_markup=area_keyboard())
     return AREA
 
@@ -73,7 +73,9 @@ async def area_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def address_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["reservation"]["address"] = update.message.text.strip()
+    address = update.message.text.strip()
+    context.user_data["reservation"]["address"] = address
+    context.user_data["reservation"]["name"] = address  # 주소를 고객 식별자로 사용
     context.user_data["reservation"]["current_item"] = {}
     await update.message.reply_text("품목을 선택해주세요:", reply_markup=item_type_keyboard())
     return ITEM_TYPE
@@ -406,8 +408,8 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for r in reservations:
         item_text = format_reservation_items(r)
         status = STATUS_LABELS.get(r.status, r.status)
-        customer_display = r.customer.phone if r.customer else ""
-        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {customer_display} | {item_text} [{status}]"
+        display = r.pickup_address or (r.customer.phone if r.customer else "")
+        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {display} | {item_text} [{status}]"
 
     await update.message.reply_text(text, reply_markup=reservation_list_keyboard(reservations))
 
@@ -431,7 +433,8 @@ async def tomorrow_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for r in reservations:
         item_text = format_reservation_items(r)
         status = STATUS_LABELS.get(r.status, r.status)
-        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {r.customer.phone if r.customer else ''} | {item_text} [{status}]"
+        display = r.pickup_address or (r.customer.phone if r.customer else "")
+        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {display} | {item_text} [{status}]"
 
     await update.message.reply_text(text, reply_markup=reservation_list_keyboard(reservations))
 

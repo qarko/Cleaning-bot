@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchApi } from '../api';
 
 const ITEM_LABELS = {
   carseat: '카시트', stroller: '쌍둥이유모차', wagon: '웨건',
@@ -22,16 +23,13 @@ function formatItems(items) {
   return items.map(i => `${ITEM_LABELS[i.item_type] || i.item_type} x${i.quantity || 1}`).join(', ');
 }
 
-export default function Home() {
+export default function Home({ onError }) {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    fetch('/api/dashboard/summary')
-      .then(r => r.json())
-      .then(setData)
-      .catch(() => {});
+    fetchApi('/api/dashboard/summary').then(setData).catch(onError);
     const interval = setInterval(() => {
-      fetch('/api/dashboard/summary').then(r => r.json()).then(setData).catch(() => {});
+      fetchApi('/api/dashboard/summary').then(setData).catch(() => {});
     }, 10000);
     return () => clearInterval(interval);
   }, []);

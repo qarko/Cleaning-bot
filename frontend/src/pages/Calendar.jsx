@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchApi } from '../api';
 
 const STATUS_LABELS = {
   pending: '대기', confirmed: '확정', picking_up: '수거중',
@@ -6,17 +7,16 @@ const STATUS_LABELS = {
   delivering: '배송중', delivered: '배송완료', settled: '정산완료',
 };
 
-export default function Calendar() {
+export default function Calendar({ onError }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [data, setData] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
 
   useEffect(() => {
-    fetch(`/api/dashboard/calendar?year=${year}&month=${month}`)
-      .then(r => r.json())
+    fetchApi(`/api/dashboard/calendar?year=${year}&month=${month}`)
       .then(setData)
-      .catch(() => {});
+      .catch(onError);
   }, [year, month]);
 
   const prevMonth = () => {

@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { fetchApi } from '../api';
 
 const ITEM_LABELS = {
   carseat: '카시트', stroller: '유모차', wagon: '웨건',
   mattress: '매트리스', sofa: '소파', carrier: '아기띠',
 };
 
-export default function Revenue() {
+export default function Revenue({ onError }) {
   const [period, setPeriod] = useState('day');
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    fetch(`/api/dashboard/revenue?period=${period}`)
-      .then(r => r.json())
+    fetchApi(`/api/dashboard/revenue?period=${period}`)
       .then(setData)
-      .catch(() => {});
+      .catch(onError);
   }, [period]);
 
   if (!data) return <div className="loading">로딩중</div>;

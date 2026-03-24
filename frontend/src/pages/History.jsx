@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchApi } from '../api';
 
 const ITEM_LABELS = {
   carseat: '카시트', stroller: '유모차', wagon: '웨건',
@@ -8,15 +9,14 @@ const STATUS_LABELS = {
   delivered: '배송완료', settled: '정산완료',
 };
 
-export default function History() {
+export default function History({ onError }) {
   const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    fetch(`/api/dashboard/history?page=${page}`)
-      .then(r => r.json())
+    fetchApi(`/api/dashboard/history?page=${page}`)
       .then(setData)
-      .catch(() => {});
+      .catch(onError);
   }, [page]);
 
   if (!data) return <div className="loading">로딩중</div>;

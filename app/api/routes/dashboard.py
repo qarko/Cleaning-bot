@@ -1,19 +1,79 @@
 from datetime import date, timedelta, datetime
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, HTTPException
 from sqlalchemy import select, func, extract
 from sqlalchemy.orm import selectinload
 from app.database import async_session
 from app.models.reservation import Reservation
 from app.models.customer import Customer
 from app.models.payment import Payment
+from app.models.employee import Employee
+from app.config import BOT_TOKEN
 import json
+import hashlib
+import hmac
+from urllib.parse import parse_qs
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+def verify_telegram_init_data(init_data: str) -> dict | None:
+    """텔레그램 미니앱 initData 검증 → 사용자 정보 반환"""
+    try:
+        parsed = parse_qs(init_data)
+        check_hash = parsed.get("hash", [None])[0]
+        if not check_hash:
+            return None
+
+        # hash 제외하고 정렬
+        data_check_items = []
+        for key, values in sorted(parsed.items()):
+            if key != "hash":
+                data_check_items.append(f"{key}={values[0]}")
+        data_check_string = "\n".join(data_check_items)
+
+        # HMAC 검증
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+        if computed_hash != check_hash:
+            return None
+
+        # user 정보 파싱
+        user_data = parsed.get("user", [None])[0]
+        if user_data:
+            return json.loads(user_data)
+        return None
+    except Exception:
+        return None
+
+
+async def verify_boss(request: Request):
+    """사장 권한 검증 미들웨어"""
+    init_data = request.headers.get("X-Telegram-Init-Data", "")
+    if not init_data:
+        raise HTTPException(status_code=401, detail="인증 정보가 없습니다")
+
+    user = verify_telegram_init_data(init_data)
+    if not user:
+        raise HTTPException(status_code=401, detail="인증에 실패했습니다")
+
+    user_id = user.get("id")
+    async with async_session() as db:
+        result = await db.execute(
+            select(Employee).where(Employee.telegram_user_id == user_id)
+        )
+        employee = result.scalar_one_or_none()
+
+    if not employee or employee.role != "boss":
+        raise HTTPException(status_code=403, detail="사장만 접근할 수 있습니다")
+
+    return employee
+
+
 @router.get("/summary")
-async def get_summary():
+async def get_summary(request: Request):
     """오늘 요약 카드"""
+    await verify_boss(request)
     today = date.today()
     async with async_session() as db:
         # 오늘 예약
@@ -66,8 +126,9 @@ async def get_summary():
 
 
 @router.get("/calendar")
-async def get_calendar(year: int = Query(None), month: int = Query(None)):
+async def get_calendar(request: Request, year: int = Query(None), month: int = Query(None)):
     """월별 캘린더 데이터"""
+    await verify_boss(request)
     today = date.today()
     if not year:
         year = today.year
@@ -109,8 +170,9 @@ async def get_calendar(year: int = Query(None), month: int = Query(None)):
 
 
 @router.get("/revenue")
-async def get_revenue(period: str = Query("month")):
+async def get_revenue(request: Request, period: str = Query("month")):
     """매출 통계 (day/week/month)"""
+    await verify_boss(request)
     today = date.today()
     async with async_session() as db:
         if period == "day":
@@ -186,8 +248,9 @@ async def get_revenue(period: str = Query("month")):
 
 
 @router.get("/history")
-async def get_history(page: int = Query(1), status: str = Query(None)):
+async def get_history(request: Request, page: int = Query(1), status: str = Query(None)):
     """완료 내역"""
+    await verify_boss(request)
     limit = 20
     offset = (page - 1) * limit
 

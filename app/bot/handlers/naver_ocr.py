@@ -197,7 +197,7 @@ def parse_time_slot(time_str: str) -> str:
 def build_naver_confirm_text(extracted: dict, items: list[dict]) -> str:
     items_text = ""
     for i, item in enumerate(items, 1):
-        label = ITEM_LABELS.get(item["item_type"], item.get("naver_name", "알 수 없음"))
+        label = item.get("naver_name") or ITEM_LABELS.get(item["item_type"], "알 수 없음")
         items_text += f"  {i}. {label} x{item.get('quantity', 1)}\n"
 
     coupon = extracted.get("coupon", "")
@@ -356,7 +356,7 @@ async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
         reservation = await create_reservation(db, reservation_data)
 
     items_text = ", ".join(
-        f"{ITEM_LABELS.get(i['item_type'], i.get('naver_name', '?'))} x{i.get('quantity', 1)}"
+        f"{i.get('naver_name') or ITEM_LABELS.get(i['item_type'], '?')} x{i.get('quantity', 1)}"
         for i in items
     )
 

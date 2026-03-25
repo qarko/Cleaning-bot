@@ -311,3 +311,78 @@ async def get_history(request: Request, page: int = Query(1), status: str = Quer
         })
 
     return {"total": total, "page": page, "reservations": items}
+
+
+@router.get("/customer")
+async def search_customer(request: Request, q: str = Query("")):
+    """고객 검색 (연락처 또는 주소)"""
+    await verify_boss(request)
+
+    if not q.strip():
+        return {"customer": None}
+
+    async with async_session() as db:
+        # 연락처로 검색
+        search = q.strip().replace("-", "").replace(" ", "")
+        if search.isdigit() and len(search) >= 3:
+            # 숫자면 연락처 검색 (부분 일치)
+            formatted_patterns = [
+                f"%{search}%",
+                f"%{search[:3]}-{search[3:7]}-{search[7:]}%" if len(search) >= 7 else f"%{search}%",
+            ]
+            from sqlalchemy import or_
+            result = await db.execute(
+                select(Customer).where(
+                    or_(
+                        Customer.phone.like(f"%{search}%"),
+                        Customer.phone.like(f"%{q.strip()}%"),
+                    )
+                ).limit(1)
+            )
+        else:
+            # 텍스트면 주소 검색
+            result = await db.execute(
+                select(Customer).where(Customer.address.like(f"%{q.strip()}%")).limit(1)
+            )
+
+        customer = result.scalar_one_or_none()
+        if not customer:
+            return {"customer": None}
+
+        # 고객 예약 이력
+        res_result = await db.execute(
+            select(Reservation)
+            .where(Reservation.customer_id == customer.id)
+            .order_by(Reservation.created_at.desc())
+            .limit(20)
+        )
+        reservations = list(res_result.scalars().all())
+
+        res_data = []
+        for r in reservations:
+            parsed_items = []
+            if r.items_json:
+                try:
+                    parsed_items = json.loads(r.items_json)
+                except Exception:
+                    pass
+            res_data.append({
+                "reservation_no": r.reservation_no,
+                "items": parsed_items,
+                "status": r.status,
+                "scheduled_date": r.scheduled_date.isoformat() if r.scheduled_date else "",
+                "price": r.price,
+                "payment_method": r.payment_method,
+                "actual_payment_method": getattr(r, 'actual_payment_method', None),
+            })
+
+        return {
+            "customer": {
+                "phone": customer.phone,
+                "address": customer.address,
+                "visit_count": customer.visit_count,
+                "total_paid": customer.total_paid,
+                "memo": customer.memo,
+            },
+            "reservations": res_data,
+        }

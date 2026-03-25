@@ -3,12 +3,14 @@ import Home from './pages/Home';
 import Calendar from './pages/Calendar';
 import Revenue from './pages/Revenue';
 import History from './pages/History';
+import Customer from './pages/Customer';
 
 const TABS = [
   { id: 'home', icon: '🏠', label: '홈' },
   { id: 'calendar', icon: '📅', label: '캘린더' },
   { id: 'revenue', icon: '💰', label: '매출' },
   { id: 'history', icon: '📋', label: '내역' },
+  { id: 'customer', icon: '👤', label: '고객' },
 ];
 
 export default function App() {
@@ -37,6 +39,7 @@ export default function App() {
       {tab === 'calendar' && <Calendar onError={onError} />}
       {tab === 'revenue' && <Revenue onError={onError} />}
       {tab === 'history' && <History onError={onError} />}
+      {tab === 'customer' && <Customer onError={onError} />}
 
       <nav className="nav">
         {TABS.map(t => (

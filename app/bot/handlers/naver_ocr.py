@@ -263,7 +263,15 @@ async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     extracted = parse_naver_text(ocr_text)
 
-    if not extracted.get("phone") and not extracted.get("customer_name"):
+    # 네이버 예약 화면 확인: 핵심 필드 중 하나라도 있으면 통과
+    has_info = (
+        extracted.get("phone")
+        or extracted.get("customer_name")
+        or extracted.get("product")
+        or extracted.get("option")
+        or extracted.get("date")
+    )
+    if not has_info:
         await update.message.reply_text(
             "네이버 예약 화면이 아니거나 정보를 인식하지 못했습니다.\n"
             "네이버 예약 상세 화면을 캡쳐해서 보내주세요."

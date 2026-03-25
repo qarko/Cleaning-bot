@@ -1,15 +1,14 @@
-import io
-import json
+import base64
 import logging
 import re
 from datetime import datetime, date
 
-from PIL import Image
-import pytesseract
+import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from sqlalchemy import select
 
+from app.config import GOOGLE_VISION_API_KEY
 from app.database import async_session
 from app.models.employee import Employee
 from app.services.reservation_service import create_reservation
@@ -32,19 +31,36 @@ NAVER_ITEM_MAP = {
 }
 
 
-def ocr_tesseract(image_bytes: bytes) -> str:
-    """Tesseract OCR로 이미지에서 한국어 텍스트 추출"""
-    image = Image.open(io.BytesIO(image_bytes))
+async def ocr_google_vision(image_bytes: bytes) -> str | None:
+    """Google Cloud Vision API로 이미지에서 텍스트 추출 (무료 티어: 월 1,000건)"""
+    if not GOOGLE_VISION_API_KEY:
+        logger.error("GOOGLE_VISION_API_KEY not set")
+        return None
 
-    # 이미지 전처리: 그레이스케일 + 해상도 확대 (인식률 향상)
-    image = image.convert("L")
-    w, h = image.size
-    if w < 1500:
-        ratio = 1500 / w
-        image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    text = pytesseract.image_to_string(image, lang="kor+eng")
-    return text
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"https://vision.googleapis.com/v1/images:annotate?key={GOOGLE_VISION_API_KEY}",
+            json={
+                "requests": [{
+                    "image": {"content": b64},
+                    "features": [{"type": "TEXT_DETECTION"}],
+                }]
+            },
+        )
+
+    if resp.status_code != 200:
+        logger.error(f"Google Vision API error: {resp.status_code} {resp.text}")
+        return None
+
+    result = resp.json()
+    annotations = result.get("responses", [{}])[0].get("textAnnotations", [])
+    if not annotations:
+        logger.error("No text detected in image")
+        return None
+
+    return annotations[0].get("description", "")
 
 
 def parse_naver_text(text: str) -> dict:
@@ -71,7 +87,7 @@ def parse_naver_text(text: str) -> dict:
     if m:
         extracted["email"] = m.group(1).strip()
 
-    # 상품
+    # 상품 (메뉴명 - 참고용)
     m = re.search(r'상품\s+(.+)', text)
     if m:
         extracted["product"] = m.group(1).strip()
@@ -94,7 +110,6 @@ def parse_naver_text(text: str) -> dict:
         extracted["people"] = m.group(1).strip()
 
     # 옵션 (실제 주문 품목) - 여러 줄일 수 있음
-    # "옵션" 이후 "요청사항" 또는 "쿠폰" 전까지의 텍스트
     m = re.search(r'옵션\s+([\s\S]+?)(?=요청사항|쿠폰|유입경로)', text)
     if m:
         extracted["option"] = m.group(1).strip()
@@ -104,7 +119,6 @@ def parse_naver_text(text: str) -> dict:
     if m:
         request_text = m.group(1).strip()
         extracted["request"] = request_text
-        # 요청사항에서 별도 연락처 추출
         phone_m = re.search(r'(\d{3}[-\s]?\d{3,4}[-\s]?\d{4})', request_text)
         if phone_m:
             extracted["alt_phone"] = phone_m.group(1).replace(" ", "")
@@ -131,7 +145,6 @@ def parse_naver_text(text: str) -> dict:
         line = line.strip()
         if not line:
             continue
-        # 각 줄에서 품목명과 수량 추출: "유모차 프리미엄 케어 1"
         qty_m = re.search(r'(\d+)\s*$', line)
         qty = int(qty_m.group(1)) if qty_m else 1
         for keyword, item_type in NAVER_ITEM_MAP.items():
@@ -139,7 +152,6 @@ def parse_naver_text(text: str) -> dict:
                 option_items.append({"name": keyword, "type": item_type, "qty": qty})
                 break
 
-    # 옵션 품목이 있으면 그걸 사용, 없으면 상품명에서 추출
     if option_items:
         extracted["items"] = option_items
     else:
@@ -166,7 +178,6 @@ def map_items(extracted: dict) -> list[dict]:
                 "naver_name": item_info.get("name", "알 수 없음"),
             })
         else:
-            # 문자열 fallback
             matched_type = None
             for keyword, item_type in NAVER_ITEM_MAP.items():
                 if keyword in str(item_info):
@@ -243,7 +254,7 @@ def naver_confirm_keyboard():
 
 
 async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """네이버 예약 캡쳐 사진 수신 → Tesseract OCR → 확인"""
+    """네이버 예약 캡쳐 사진 수신 → Google Vision OCR → 확인"""
     user_id = update.effective_user.id
     async with async_session() as db:
         result = await db.execute(select(Employee).where(Employee.telegram_user_id == user_id))
@@ -258,15 +269,9 @@ async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_text("🔍 네이버 예약 정보를 분석하고 있습니다...")
 
-    # Tesseract OCR
-    try:
-        ocr_text = ocr_tesseract(bytes(image_bytes))
-    except Exception as e:
-        logger.error(f"OCR error: {e}")
-        await update.message.reply_text("이미지 분석 중 오류가 발생했습니다. 다시 시도해주세요.")
-        return
-
-    if not ocr_text or len(ocr_text.strip()) < 10:
+    # Google Vision OCR
+    ocr_text = await ocr_google_vision(bytes(image_bytes))
+    if not ocr_text:
         await update.message.reply_text("이미지에서 텍스트를 인식하지 못했습니다. 다시 시도해주세요.")
         return
 

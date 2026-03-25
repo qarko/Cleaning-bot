@@ -173,7 +173,7 @@ def reservation_action_keyboard(reservation_no: str, status: str, role: str = "s
     buttons = []
 
     if role == "staff":
-        # 관리자용: 업무 처리 버튼
+        # 관리자용: 업무 처리 + 정산
         staff_actions = {
             "pending": [("확정", "action:confirm")],
             "confirmed": [("수거 출발", "action:picking_up")],
@@ -182,6 +182,7 @@ def reservation_action_keyboard(reservation_no: str, status: str, role: str = "s
             "cleaning": [("세척 완료", "action:cleaned")],
             "cleaned": [("배송 출발", "action:delivering")],
             "delivering": [("배송 완료", "action:delivered")],
+            "delivered": [("정산", "action:settle")],
         }
         actions = staff_actions.get(status, [])
         for label, data in actions:

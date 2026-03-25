@@ -175,24 +175,25 @@ async def send_or_update_card(bot: Bot, reservation, target_role: str = None, it
     for emp in employees:
         chat_id = emp.telegram_user_id
         existing_msg_id = saved_msgs.get(str(chat_id))
+        # 역할별 키보드
+        emp_kb = reservation_action_keyboard(reservation.reservation_no, reservation.status, role=emp.role)
+        if reservation.status in ("settled", "cancelled"):
+            emp_kb = None
 
         try:
             if existing_msg_id:
-                # 기존 메시지 수정
                 await bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=existing_msg_id,
                     text=text,
-                    reply_markup=kb,
+                    reply_markup=emp_kb,
                 )
             else:
-                # 새 메시지 전송
-                sent = await bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
+                sent = await bot.send_message(chat_id=chat_id, text=text, reply_markup=emp_kb)
                 await save_notify_message(reservation.reservation_no, chat_id, sent.message_id)
         except Exception as e:
-            # 수정 실패하면 새 메시지 전송
             try:
-                sent = await bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
+                sent = await bot.send_message(chat_id=chat_id, text=text, reply_markup=emp_kb)
                 await save_notify_message(reservation.reservation_no, chat_id, sent.message_id)
             except Exception:
                 logger.error(f"Failed to notify {chat_id}: {e}")

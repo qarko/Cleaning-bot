@@ -10,7 +10,7 @@ from app.services.reservation_service import (
 )
 from app.bot.keyboards import (
     reservation_action_keyboard, payment_method_keyboard,
-    reservation_list_keyboard,
+    reservation_list_keyboard, cancel_confirm_keyboard,
     ITEM_LABELS, TIME_LABELS, STATUS_LABELS, PAYMENT_LABELS,
 )
 from app.bot.notifications import notify_group_status_change
@@ -73,6 +73,14 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
+    # 취소 확인 단계
+    if action == "cancelconfirm":
+        await query.edit_message_text(
+            f"⚠️ {reservation_no} 예약을 정말 취소하시겠습니까?",
+            reply_markup=cancel_confirm_keyboard(reservation_no),
+        )
+        return
+
     # 취소 처리
     if action == "cancel":
         async with async_session() as db:
@@ -91,7 +99,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(
                 f"✅ {reservation_no} 예약 확정!\n"
                 f"고객: {r.customer.name} | {item} x{r.quantity}",
-                reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
+                reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=employee.role),
             )
             await notify_group_status_change(context.bot, r, "confirmed", employee.name, sender_role=employee.role)
         return
@@ -134,7 +142,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_label = STATUS_LABELS.get(action, action)
         await query.edit_message_text(
             f"✅ {reservation_no} → {status_label}",
-            reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
+            reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=employee.role),
         )
         await notify_group_status_change(context.bot, r, action, employee.name, sender_role=employee.role)
 
@@ -169,7 +177,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             delivery_text = f"\n📦 배송 예정: {pending['delivery_date']}"
         await update.message.reply_text(
             f"✅ {reservation_no} → {status_label}{photo_text}{delivery_text}",
-            reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
+            reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=pending.get("employee_role", "staff")),
         )
         await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
 
@@ -201,7 +209,7 @@ async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         memo_text = f"\n메모: {memo}" if memo else ""
         await update.message.reply_text(
             f"✅ {reservation_no} → {status_label}{delivery_text}{memo_text}",
-            reply_markup=reservation_action_keyboard(r.reservation_no, r.status),
+            reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=pending.get("employee_role", "staff")),
         )
         await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
 

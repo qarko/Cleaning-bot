@@ -503,7 +503,9 @@ async def view_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"상태: [{status}]\n"
         f"━━━━━━━━━━━━━━"
     )
-    await query.edit_message_text(text, reply_markup=reservation_action_keyboard(r.reservation_no, r.status))
+    employee = await check_auth(update)
+    role = employee.role if employee else "staff"
+    await query.edit_message_text(text, reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=role))
 
 
 def get_reservation_handler():

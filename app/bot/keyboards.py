@@ -168,26 +168,42 @@ def confirm_keyboard():
     ])
 
 
-def reservation_action_keyboard(reservation_no: str, status: str):
+def reservation_action_keyboard(reservation_no: str, status: str, role: str = "staff"):
+    """역할별 액션 버튼. 관리자: 업무 처리 버튼 / 대표: 조회 + 정산만"""
     buttons = []
-    status_actions = {
-        "pending": [("확정", "action:confirm")],
-        "confirmed": [("수거 출발", "action:picking_up")],
-        "picking_up": [("수거 완료", "action:picked_up")],
-        "picked_up": [("세척 시작", "action:cleaning")],
-        "cleaning": [("세척 완료", "action:cleaned")],
-        "cleaned": [("배송 출발", "action:delivering")],
-        "delivering": [("배송 완료", "action:delivered")],
-        "delivered": [("정산", "action:settle")],
-    }
-    actions = status_actions.get(status, [])
-    for label, data in actions:
-        buttons.append([InlineKeyboardButton(f"✅ {label}", callback_data=f"{data}:{reservation_no}")])
 
-    if status not in ("settled", "cancelled"):
-        buttons.append([InlineKeyboardButton("취소", callback_data=f"action:cancel:{reservation_no}")])
+    if role == "staff":
+        # 관리자용: 업무 처리 버튼
+        staff_actions = {
+            "pending": [("확정", "action:confirm")],
+            "confirmed": [("수거 출발", "action:picking_up")],
+            "picking_up": [("수거 완료", "action:picked_up")],
+            "picked_up": [("세척 시작", "action:cleaning")],
+            "cleaning": [("세척 완료", "action:cleaned")],
+            "cleaned": [("배송 출발", "action:delivering")],
+            "delivering": [("배송 완료", "action:delivered")],
+        }
+        actions = staff_actions.get(status, [])
+        for label, data in actions:
+            buttons.append([InlineKeyboardButton(f"✅ {label}", callback_data=f"{data}:{reservation_no}")])
+    else:
+        # 대표용: 정산만
+        if status == "delivered":
+            buttons.append([InlineKeyboardButton("💰 정산", callback_data=f"action:settle:{reservation_no}")])
+
+    # 예약 취소는 대표만 + 별도 확인 단계
+    if role == "boss" and status not in ("settled", "cancelled", "delivered"):
+        buttons.append([InlineKeyboardButton("❌ 예약 취소", callback_data=f"action:cancelconfirm:{reservation_no}")])
 
     return InlineKeyboardMarkup(buttons)
+
+
+def cancel_confirm_keyboard(reservation_no: str):
+    """예약 취소 확인"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⚠️ 정말 취소합니다", callback_data=f"action:cancel:{reservation_no}")],
+        [InlineKeyboardButton("돌아가기", callback_data=f"view:{reservation_no}")],
+    ])
 
 
 def payment_method_keyboard(reservation_no: str):

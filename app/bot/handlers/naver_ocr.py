@@ -1,14 +1,14 @@
-import io
+import base64
 import logging
 import re
 from datetime import datetime, date
 
-from PIL import Image
-import pytesseract
+import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from sqlalchemy import select
 
+from app.config import GOOGLE_VISION_API_KEY
 from app.database import async_session
 from app.models.employee import Employee
 from app.services.reservation_service import create_reservation
@@ -31,16 +31,36 @@ NAVER_ITEM_MAP = {
 }
 
 
-def ocr_tesseract(image_bytes: bytes) -> str:
-    """Tesseract OCR로 이미지에서 한국어 텍스트 추출"""
-    image = Image.open(io.BytesIO(image_bytes))
-    image = image.convert("L")
-    w, h = image.size
-    if w < 1500:
-        ratio = 1500 / w
-        image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
-    text = pytesseract.image_to_string(image, lang="kor+eng")
-    return text
+async def ocr_google_vision(image_bytes: bytes) -> str | None:
+    """Google Cloud Vision API로 이미지에서 텍스트 추출 (무료 티어: 월 1,000건)"""
+    if not GOOGLE_VISION_API_KEY:
+        logger.error("GOOGLE_VISION_API_KEY not set")
+        return None
+
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"https://vision.googleapis.com/v1/images:annotate?key={GOOGLE_VISION_API_KEY}",
+            json={
+                "requests": [{
+                    "image": {"content": b64},
+                    "features": [{"type": "TEXT_DETECTION"}],
+                }]
+            },
+        )
+
+    if resp.status_code != 200:
+        logger.error(f"Google Vision API error: {resp.status_code} {resp.text}")
+        return None
+
+    result = resp.json()
+    annotations = result.get("responses", [{}])[0].get("textAnnotations", [])
+    if not annotations:
+        logger.error("No text detected in image")
+        return None
+
+    return annotations[0].get("description", "")
 
 
 def parse_naver_text(text: str) -> dict:
@@ -219,7 +239,7 @@ def naver_confirm_keyboard():
 
 
 async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """네이버 예약 캡쳐 사진 수신 → Tesseract OCR → 확인"""
+    """네이버 예약 캡쳐 사진 수신 → Google Vision OCR → 확인"""
     user_id = update.effective_user.id
     async with async_session() as db:
         result = await db.execute(select(Employee).where(Employee.telegram_user_id == user_id))
@@ -234,14 +254,8 @@ async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_text("🔍 네이버 예약 정보를 분석하고 있습니다...")
 
-    try:
-        ocr_text = ocr_tesseract(bytes(image_bytes))
-    except Exception as e:
-        logger.error(f"OCR error: {e}")
-        await update.message.reply_text("이미지 분석 중 오류가 발생했습니다. 다시 시도해주세요.")
-        return
-
-    if not ocr_text or len(ocr_text.strip()) < 10:
+    ocr_text = await ocr_google_vision(bytes(image_bytes))
+    if not ocr_text:
         await update.message.reply_text("이미지에서 텍스트를 인식하지 못했습니다. 다시 시도해주세요.")
         return
 

@@ -9,6 +9,10 @@ const STATUS_LABELS = {
   delivered: '배송완료', settled: '정산완료',
 };
 
+const METHOD_LABELS = {
+  cash: '현금', card: '카드', naver: '네이버',
+};
+
 export default function History({ onError }) {
   const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
@@ -35,13 +39,22 @@ export default function History({ onError }) {
           {data.reservations.map(r => (
             <div key={r.reservation_no} className="reservation-item">
               <div className="res-info">
-                <div className="res-customer">{r.customer_name}</div>
+                <div className="res-customer">{r.address || r.customer_phone || r.customer_name}</div>
                 <div className="res-detail">
                   {r.items && r.items.length > 0
                     ? r.items.map(i => `${ITEM_LABELS[i.item_type] || i.item_type} x${i.quantity || 1}`).join(', ')
                     : r.reservation_no}
                 </div>
-                <div className="res-detail">{r.scheduled_date}</div>
+                <div className="res-detail">
+                  {r.scheduled_date}
+                  {r.actual_payment_method && r.actual_payment_method !== r.payment_method
+                    ? ` · ${METHOD_LABELS[r.payment_method] || ''}→${METHOD_LABELS[r.actual_payment_method] || ''}`
+                    : r.actual_payment_method
+                      ? ` · ${METHOD_LABELS[r.actual_payment_method] || ''}`
+                      : r.payment_method
+                        ? ` · ${METHOD_LABELS[r.payment_method] || ''}`
+                        : ''}
+                </div>
               </div>
               <div className="res-right">
                 <div className="res-price">{(r.price || 0).toLocaleString()}원</div>

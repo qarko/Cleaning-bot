@@ -489,15 +489,27 @@ async def view_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status = STATUS_LABELS.get(r.status, r.status)
     notes = r.special_notes or "없음"
 
+    # 결제 표시
+    booked = PAYMENT_LABELS.get(r.payment_method or "", "")
+    actual = PAYMENT_LABELS.get(getattr(r, 'actual_payment_method', None) or "", "")
+    if actual and actual != booked:
+        pay_text = f"{booked} → {actual}"
+    elif actual:
+        pay_text = actual
+    elif booked:
+        pay_text = booked
+    else:
+        pay_text = "-"
+
     text = (
         f"━━━━━━━━━━━━━━\n"
         f"📋 {r.reservation_no}\n"
         f"━━━━━━━━━━━━━━\n"
-        f"고객: {r.customer.name}\n"
-        f"연락처: {r.customer.phone}\n"
+        f"연락처: {r.customer.phone if r.customer else '-'}\n"
         f"주소: {r.pickup_address or '-'}\n"
         f"품목: {items_text}\n"
         f"일시: {r.scheduled_date.strftime('%Y.%m.%d')} {TIME_LABELS.get(r.scheduled_time, r.scheduled_time)}\n"
+        f"결제: {pay_text}\n"
         f"특이사항: {notes}\n"
         f"금액: {r.price:,}원\n"
         f"상태: [{status}]\n"

@@ -151,6 +151,7 @@ async def settle_reservation(db: AsyncSession, reservation_no: str, method: str)
     )
     db.add(payment)
     reservation.status = "settled"
+    reservation.actual_payment_method = method
 
     # 고객 총 결제 금액 업데이트
     reservation.customer.total_paid += amount

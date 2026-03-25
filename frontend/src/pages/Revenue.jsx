@@ -6,6 +6,10 @@ const ITEM_LABELS = {
   mattress: '매트리스', sofa: '소파', carrier: '아기띠',
 };
 
+const METHOD_LABELS = {
+  cash: '현금(계좌이체)', card: '카드', naver: '네이버예약',
+};
+
 export default function Revenue({ onError }) {
   const [period, setPeriod] = useState('day');
   const [data, setData] = useState(null);
@@ -99,6 +103,20 @@ export default function Revenue({ onError }) {
               <div key={i} className="item-row">
                 <span className="item-name">{ITEM_LABELS[item.item_type] || item.item_type} ({item.count}건)</span>
                 <span className="item-revenue">{(item.revenue || 0).toLocaleString()}원</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.by_method && data.by_method.length > 0 && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="card-title">결제 방법별 매출</div>
+          <div className="item-breakdown">
+            {data.by_method.map((m, i) => (
+              <div key={i} className="item-row">
+                <span className="item-name">{METHOD_LABELS[m.method] || m.method} ({m.count}건)</span>
+                <span className="item-revenue">{(m.revenue || 0).toLocaleString()}원</span>
               </div>
             ))}
           </div>

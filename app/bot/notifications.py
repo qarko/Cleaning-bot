@@ -115,8 +115,23 @@ def build_reservation_card(reservation, items_data=None, status_history=None) ->
     if notes:
         text += f"메모: {notes}\n"
 
+    text += f"금액: {reservation.price:,}원\n"
+
+    # 결제 방법 표시
+    from app.bot.keyboards import PAYMENT_LABELS
+    booked = reservation.payment_method
+    actual = getattr(reservation, 'actual_payment_method', None)
+    booked_label = PAYMENT_LABELS.get(booked or "", "")
+    actual_label = PAYMENT_LABELS.get(actual or "", "")
+
+    if actual and actual != booked:
+        text += f"결제: {booked_label} → {actual_label}\n"
+    elif actual:
+        text += f"결제: {actual_label}\n"
+    elif booked_label:
+        text += f"결제: {booked_label}\n"
+
     text += (
-        f"금액: {reservation.price:,}원\n"
         f"\n{progress}\n"
         f"━━━━━━━━━━━━━━"
     )

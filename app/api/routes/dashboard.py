@@ -244,7 +244,18 @@ async def get_revenue(request: Request, period: str = Query("month")):
         )
         by_item = [{"item_type": row.item_type, "revenue": row.total, "count": row.count} for row in result]
 
-    return {"period": period, "data": data, "by_item": by_item}
+        # 결제 방법별 매출
+        result = await db.execute(
+            select(
+                Payment.method,
+                func.sum(Payment.amount).label("total"),
+                func.count().label("count"),
+            )
+            .group_by(Payment.method)
+        )
+        by_method = [{"method": row.method, "revenue": row.total, "count": row.count} for row in result]
+
+    return {"period": period, "data": data, "by_item": by_item, "by_method": by_method}
 
 
 @router.get("/history")
@@ -288,10 +299,13 @@ async def get_history(request: Request, page: int = Query(1), status: str = Quer
             "reservation_no": r.reservation_no,
             "customer_name": r.customer.name if r.customer else "",
             "customer_phone": r.customer.phone if r.customer else "",
+            "address": r.pickup_address or "",
             "items": parsed_items,
             "status": r.status,
             "scheduled_date": r.scheduled_date.isoformat() if r.scheduled_date else "",
             "price": r.price,
+            "payment_method": r.payment_method,
+            "actual_payment_method": getattr(r, 'actual_payment_method', None),
             "created_at": r.created_at.isoformat() if r.created_at else "",
         })
 

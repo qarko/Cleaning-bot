@@ -87,16 +87,37 @@ def parse_naver_text(text: str) -> dict:
     if m:
         extracted["product"] = m.group(1).strip()
 
-    m = re.search(r'이용일시\s+(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*\([월화수목금토일]\)\s*(오전|오후)\s*(\d{1,2}):(\d{2})', text)
-    if m:
-        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        ampm, hour, minute = m.group(4), int(m.group(5)), int(m.group(6))
-        if ampm == "오후" and hour != 12:
-            hour += 12
-        elif ampm == "오전" and hour == 12:
-            hour = 0
-        extracted["date"] = f"{year}-{month:02d}-{day:02d}"
-        extracted["time"] = f"{hour:02d}:{minute:02d}"
+    # 이용일시 파싱 - OCR 오차를 고려해 여러 패턴 시도
+    date_patterns = [
+        # 기본: 이용일시 2026. 3. 25. (화) 오전 10:00
+        r'이용일시\s+(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*\([월화수목금토일]\)\s*(오전|오후)\s*(\d{1,2}):(\d{2})',
+        # 요일 누락 또는 OCR 미인식
+        r'이용일시\s+(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*(?:\([^)]*\))?\s*(오전|오후)\s*(\d{1,2}):(\d{2})',
+        # 점 대신 다른 구분자 (/, -)
+        r'이용일시\s+(\d{4})[./\-]\s*(\d{1,2})[./\-]\s*(\d{1,2})\.?\s*(?:\([^)]*\))?\s*(오전|오후)\s*(\d{1,2}):(\d{2})',
+        # 이용일시가 줄바꿈 후에 날짜
+        r'이용일시\s*\n\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*(?:\([^)]*\))?\s*(오전|오후)\s*(\d{1,2}):(\d{2})',
+        # 오전/오후 없이 24시간 표기
+        r'이용일시\s+(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*(?:\([^)]*\))?\s*(\d{1,2}):(\d{2})',
+    ]
+    for i, pat in enumerate(date_patterns):
+        m = re.search(pat, text)
+        if m:
+            groups = m.groups()
+            year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
+            if len(groups) == 6:
+                # 오전/오후 포함 패턴
+                ampm, hour, minute = groups[3], int(groups[4]), int(groups[5])
+                if ampm == "오후" and hour != 12:
+                    hour += 12
+                elif ampm == "오전" and hour == 12:
+                    hour = 0
+            else:
+                # 24시간 표기 (오전/오후 없음)
+                hour, minute = int(groups[3]), int(groups[4])
+            extracted["date"] = f"{year}-{month:02d}-{day:02d}"
+            extracted["time"] = f"{hour:02d}:{minute:02d}"
+            break
 
     m = re.search(r'인원\s+(\d+)', text)
     if m:
@@ -266,9 +287,11 @@ async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("이미지에서 텍스트를 인식하지 못했습니다. 다시 시도해주세요.")
         return
 
-    logger.info(f"OCR result: {ocr_text[:300]}...")
+    logger.info(f"OCR result:\n{ocr_text}")
 
     extracted = parse_naver_text(ocr_text)
+    if not extracted.get("date"):
+        logger.warning(f"날짜 파싱 실패 - OCR 텍스트에서 이용일시를 찾지 못함")
 
     # 네이버 예약 화면 확인: 핵심 필드 중 하나라도 있으면 통과
     has_info = (

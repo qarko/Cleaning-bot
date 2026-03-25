@@ -129,43 +129,35 @@ def parse_naver_text(text: str) -> dict:
             extracted["address"] = addr
 
     # 옵션에서 실제 주문 품목 추출 (핵심!)
-    # OCR 줄바꿈이 불규칙할 수 있으므로 키워드 기반으로 추출
-    option_text = extracted.get("option", "")
+    # Google Vision OCR이 옵션/요청사항 텍스트를 섞을 수 있으므로
+    # 전체 OCR 텍스트에서 "X 프리미엄 케어 N" 패턴으로 검색
     option_items = []
-
-    # 방법1: 줄 단위 파싱
-    for line in option_text.split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        qty_m = re.search(r'(\d+)\s*$', line)
-        qty = int(qty_m.group(1)) if qty_m else 1
-        for keyword, item_type in NAVER_ITEM_MAP.items():
-            if keyword in line:
-                option_items.append({"name": keyword, "type": item_type, "qty": qty})
-                break
-
-    # 방법2: 줄 파싱으로 못 찾으면 전체 텍스트에서 키워드 검색
-    if len(option_items) <= 1 and option_text:
-        option_items = []
-        for keyword, item_type in NAVER_ITEM_MAP.items():
-            # "유모차"가 "쌍둥이유모차"에 포함되므로 정확한 매칭 필요
-            # 각 키워드 뒤에 공백/케어/프리미엄 등이 오는 패턴
-            pattern = rf'{keyword}\s*(?:프리미엄\s*)?(?:케어\s*)?(\d+)'
-            matches = re.findall(pattern, option_text)
-            for qty_str in matches:
+    found_types = set()
+    for keyword, item_type in NAVER_ITEM_MAP.items():
+        pattern = rf'{keyword}\s*프리미엄\s*케어\s*(\d+)'
+        matches = re.findall(pattern, text)
+        for qty_str in matches:
+            if keyword not in found_types:
                 qty = int(qty_str) if qty_str else 1
                 option_items.append({"name": keyword, "type": item_type, "qty": qty})
+                found_types.add(keyword)
 
-    if option_items:
-        extracted["items"] = option_items
-    else:
+    # "프리미엄 케어" 패턴 못 찾으면 옵션 텍스트에서 키워드 검색
+    if not option_items:
+        option_text = extracted.get("option", "")
+        for keyword, item_type in NAVER_ITEM_MAP.items():
+            if keyword in option_text and keyword not in found_types:
+                option_items.append({"name": keyword, "type": item_type, "qty": 1})
+                found_types.add(keyword)
+
+    # 그래도 없으면 상품명에서 추출
+    if not option_items:
         product = extracted.get("product", "")
-        items = []
         for keyword in NAVER_ITEM_MAP:
             if keyword in product:
-                items.append({"name": keyword, "type": NAVER_ITEM_MAP[keyword], "qty": 1})
-        extracted["items"] = items if items else [{"name": product, "type": "unknown", "qty": 1}]
+                option_items.append({"name": keyword, "type": NAVER_ITEM_MAP[keyword], "qty": 1})
+
+    extracted["items"] = option_items if option_items else [{"name": extracted.get("product", "알 수 없음"), "type": "unknown", "qty": 1}]
 
     return extracted
 

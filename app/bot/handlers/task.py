@@ -151,6 +151,9 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending = context.user_data.get("pending_action")
     if not pending:
+        # pending_action이 없으면 네이버 예약 캡쳐로 처리
+        from app.bot.handlers.naver_ocr import naver_photo_handler
+        await naver_photo_handler(update, context)
         return
 
     photo_url = None

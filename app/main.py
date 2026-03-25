@@ -13,6 +13,7 @@ from app.bot.handlers.reservation import get_reservation_handler, today_command,
 from app.bot.handlers.task import action_callback, photo_handler, skip_photo_handler, payment_callback, delivery_date_callback, mytasks_command
 from app.bot.handlers.quote import quote_command, quote_item_callback, quote_subtype_callback, quote_method_callback, quote_qty_callback
 from app.bot.handlers.customer import customer_command
+from app.bot.handlers.naver_ocr import naver_confirm_callback
 from app.bot.handlers.menu import menu_handler
 from app.bot.notifications import send_daily_schedule
 
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     bot_app.add_handler(CallbackQueryHandler(delivery_date_callback, pattern=r"^date"))  # 배송 예정일 (pending_action 체크)
     bot_app.add_handler(CallbackQueryHandler(action_callback, pattern=r"^action:"))
     bot_app.add_handler(CallbackQueryHandler(payment_callback, pattern=r"^pay:"))
+    bot_app.add_handler(CallbackQueryHandler(naver_confirm_callback, pattern=r"^naver:"))
     bot_app.add_handler(CallbackQueryHandler(quote_item_callback, pattern=r"^q_item:"))
     bot_app.add_handler(CallbackQueryHandler(quote_subtype_callback, pattern=r"^q_sub:"))
     bot_app.add_handler(CallbackQueryHandler(quote_method_callback, pattern=r"^q_method:"))

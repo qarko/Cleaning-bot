@@ -1,0 +1,353 @@
+import io
+import json
+import logging
+import re
+from datetime import datetime, date
+
+from PIL import Image
+import pytesseract
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+from sqlalchemy import select
+
+from app.database import async_session
+from app.models.employee import Employee
+from app.services.reservation_service import create_reservation
+from app.bot.keyboards import (
+    ITEM_LABELS, TIME_LABELS, PAYMENT_LABELS, AREA_LABELS,
+)
+from app.bot.notifications import notify_group_new_reservation
+
+logger = logging.getLogger(__name__)
+
+# 네이버 상품명 → 봇 item_type 매핑
+NAVER_ITEM_MAP = {
+    "카시트": "carseat",
+    "유모차": "stroller",
+    "쌍둥이유모차": "stroller",
+    "웨건": "wagon",
+    "매트리스": "mattress",
+    "소파": "sofa",
+    "아기띠": "carrier",
+}
+
+
+def ocr_tesseract(image_bytes: bytes) -> str:
+    """Tesseract OCR로 이미지에서 한국어 텍스트 추출"""
+    image = Image.open(io.BytesIO(image_bytes))
+
+    # 이미지 전처리: 그레이스케일 + 해상도 확대 (인식률 향상)
+    image = image.convert("L")
+    w, h = image.size
+    if w < 1500:
+        ratio = 1500 / w
+        image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+    text = pytesseract.image_to_string(image, lang="kor+eng")
+    return text
+
+
+def parse_naver_text(text: str) -> dict:
+    """OCR 텍스트에서 네이버 예약 정보를 파싱"""
+    extracted = {}
+
+    # 예약자
+    m = re.search(r'예약자\s+(.+)', text)
+    if m:
+        extracted["customer_name"] = m.group(1).strip()
+
+    # 전화번호
+    m = re.search(r'전화번호\s+([\d\-]+)', text)
+    if m:
+        extracted["phone"] = m.group(1).strip()
+
+    # 예약번호
+    m = re.search(r'예약번호\s+(\d+)', text)
+    if m:
+        extracted["reservation_number"] = m.group(1).strip()
+
+    # 이메일
+    m = re.search(r'이메일\s+([\w.\-]+@[\w.\-]+)', text)
+    if m:
+        extracted["email"] = m.group(1).strip()
+
+    # 상품
+    m = re.search(r'상품\s+(.+)', text)
+    if m:
+        extracted["product"] = m.group(1).strip()
+
+    # 이용일시 - "2026. 3. 25.(수) 오후 4:00" 형태
+    m = re.search(r'이용일시\s+(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*\([월화수목금토일]\)\s*(오전|오후)\s*(\d{1,2}):(\d{2})', text)
+    if m:
+        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        ampm, hour, minute = m.group(4), int(m.group(5)), int(m.group(6))
+        if ampm == "오후" and hour != 12:
+            hour += 12
+        elif ampm == "오전" and hour == 12:
+            hour = 0
+        extracted["date"] = f"{year}-{month:02d}-{day:02d}"
+        extracted["time"] = f"{hour:02d}:{minute:02d}"
+
+    # 인원
+    m = re.search(r'인원\s+(\d+)', text)
+    if m:
+        extracted["people"] = m.group(1).strip()
+
+    # 옵션
+    m = re.search(r'옵션\s+(.+)', text)
+    if m:
+        extracted["option"] = m.group(1).strip()
+
+    # 쿠폰
+    m = re.search(r'쿠폰\s+(.+?)(?:\n|$)', text)
+    if m:
+        coupon_text = m.group(1).strip()
+        if coupon_text and "없" not in coupon_text:
+            extracted["coupon"] = coupon_text
+
+    # 주소 - "예약자입력정보" 아래 주소 찾기
+    m = re.search(r'예약자입력정보.*?\n.*?\n(.+?)(?:\n|$)', text, re.DOTALL)
+    if m:
+        addr = m.group(1).strip()
+        if addr and len(addr) > 3:
+            extracted["address"] = addr
+
+    # 상품명에서 품목 리스트 추출
+    product = extracted.get("product", "")
+    items = []
+    for keyword in NAVER_ITEM_MAP:
+        if keyword in product:
+            items.append(keyword)
+    # 옵션에서도 품목 추출
+    option = extracted.get("option", "")
+    for keyword in NAVER_ITEM_MAP:
+        if keyword in option and keyword not in items:
+            items.append(keyword)
+    extracted["items"] = items if items else [product]
+
+    return extracted
+
+
+def map_items(extracted: dict) -> list[dict]:
+    """추출된 상품 정보를 봇의 품목 형식으로 변환"""
+    items = []
+    naver_items = extracted.get("items", [])
+
+    for name in naver_items:
+        name_lower = name.strip()
+        matched_type = None
+        for keyword, item_type in NAVER_ITEM_MAP.items():
+            if keyword in name_lower:
+                matched_type = item_type
+                break
+
+        if matched_type:
+            items.append({
+                "item_type": matched_type,
+                "quantity": 1,
+                "naver_name": name_lower,
+            })
+
+    if not items:
+        items.append({
+            "item_type": "unknown",
+            "quantity": 1,
+            "naver_name": extracted.get("product", "알 수 없음"),
+        })
+
+    return items
+
+
+def parse_time_slot(time_str: str) -> str:
+    """시간을 morning/afternoon으로 변환"""
+    try:
+        hour = int(time_str.split(":")[0])
+        return "morning" if hour < 12 else "afternoon"
+    except (ValueError, IndexError):
+        return "afternoon"
+
+
+def build_naver_confirm_text(extracted: dict, items: list[dict]) -> str:
+    """확인 메시지 텍스트 생성"""
+    items_text = ""
+    for i, item in enumerate(items, 1):
+        label = ITEM_LABELS.get(item["item_type"], item.get("naver_name", "알 수 없음"))
+        items_text += f"  {i}. {label} x{item.get('quantity', 1)}\n"
+
+    option = extracted.get("option", "")
+    option_text = f"옵션: {option}\n" if option else ""
+    coupon = extracted.get("coupon", "")
+    coupon_text = f"쿠폰: {coupon}\n" if coupon else ""
+    address = extracted.get("address", "")
+    address_text = f"주소: {address}\n" if address else ""
+
+    return (
+        "━━━━━━━━━━━━━━\n"
+        "📋 네이버 예약 자동 등록\n"
+        "━━━━━━━━━━━━━━\n"
+        f"예약자: {extracted.get('customer_name', '-')}\n"
+        f"연락처: {extracted.get('phone', '-')}\n"
+        f"네이버 예약번호: {extracted.get('reservation_number', '-')}\n"
+        f"{address_text}"
+        f"━━━━━━━━━━━━━━\n"
+        f"상품: {extracted.get('product', '-')}\n"
+        f"{option_text}"
+        f"{items_text}"
+        f"━━━━━━━━━━━━━━\n"
+        f"일시: {extracted.get('date', '-')} {extracted.get('time', '-')}\n"
+        f"결제: 네이버예약\n"
+        f"{coupon_text}"
+        "━━━━━━━━━━━━━━\n"
+        "\n이 정보로 예약을 등록할까요?"
+    )
+
+
+def naver_confirm_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ 등록", callback_data="naver:yes")],
+        [InlineKeyboardButton("❌ 취소", callback_data="naver:cancel")],
+    ])
+
+
+async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """네이버 예약 캡쳐 사진 수신 → Tesseract OCR → 확인"""
+    user_id = update.effective_user.id
+    async with async_session() as db:
+        result = await db.execute(select(Employee).where(Employee.telegram_user_id == user_id))
+        employee = result.scalar_one_or_none()
+
+    if not employee or employee.role != "boss":
+        return
+
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    image_bytes = await file.download_as_bytearray()
+
+    await update.message.reply_text("🔍 네이버 예약 정보를 분석하고 있습니다...")
+
+    # Tesseract OCR
+    try:
+        ocr_text = ocr_tesseract(bytes(image_bytes))
+    except Exception as e:
+        logger.error(f"OCR error: {e}")
+        await update.message.reply_text("이미지 분석 중 오류가 발생했습니다. 다시 시도해주세요.")
+        return
+
+    if not ocr_text or len(ocr_text.strip()) < 10:
+        await update.message.reply_text("이미지에서 텍스트를 인식하지 못했습니다. 다시 시도해주세요.")
+        return
+
+    logger.info(f"OCR result: {ocr_text[:300]}...")
+
+    # 텍스트에서 예약 정보 파싱
+    extracted = parse_naver_text(ocr_text)
+
+    if not extracted.get("phone") and not extracted.get("customer_name"):
+        await update.message.reply_text(
+            "네이버 예약 화면이 아니거나 정보를 인식하지 못했습니다.\n"
+            "네이버 예약 상세 화면을 캡쳐해서 보내주세요."
+        )
+        return
+
+    # 품목 매핑
+    items = map_items(extracted)
+
+    # 확인 메시지
+    text = build_naver_confirm_text(extracted, items)
+    await update.message.reply_text(text, reply_markup=naver_confirm_keyboard())
+
+    context.user_data["naver_reservation"] = {
+        "extracted": extracted,
+        "items": items,
+    }
+
+
+async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """네이버 예약 확인/취소 콜백"""
+    query = update.callback_query
+    await query.answer()
+
+    action = query.data.split(":")[1]
+    naver_data = context.user_data.get("naver_reservation")
+
+    if action == "cancel" or not naver_data:
+        context.user_data.pop("naver_reservation", None)
+        await query.edit_message_text("네이버 예약 등록이 취소되었습니다.")
+        return
+
+    extracted = naver_data["extracted"]
+    items = naver_data["items"]
+
+    try:
+        sched_date = datetime.strptime(extracted["date"], "%Y-%m-%d").date()
+    except (KeyError, ValueError):
+        sched_date = date.today()
+
+    time_slot = parse_time_slot(extracted.get("time", "14:00"))
+
+    from app.services.reservation_service import get_price
+    total_price = 0
+    for item in items:
+        if item["item_type"] != "unknown":
+            async with async_session() as db:
+                price = await get_price(db, item["item_type"], item.get("item_subtype"))
+            item["price"] = price * item.get("quantity", 1)
+            item["unit_price"] = price
+            total_price += item["price"]
+
+    notes_parts = []
+    if extracted.get("reservation_number"):
+        notes_parts.append(f"네이버예약#{extracted['reservation_number']}")
+    if extracted.get("option"):
+        notes_parts.append(f"옵션: {extracted['option']}")
+    if extracted.get("coupon"):
+        notes_parts.append(f"쿠폰: {extracted['coupon']}")
+    if extracted.get("customer_name"):
+        notes_parts.append(f"예약자: {extracted['customer_name']}")
+    special_notes = " | ".join(notes_parts) if notes_parts else None
+
+    address = extracted.get("address", "")
+    area = "daejeon"
+    if "세종" in address:
+        area = "sejong"
+    elif "논산" in address:
+        area = "nonsan"
+
+    reservation_data = {
+        "name": address or extracted.get("customer_name", "네이버예약"),
+        "phone": extracted.get("phone", "010-0000-0000").replace("-", "").replace(" ", ""),
+        "area": area,
+        "address": address,
+        "items": items,
+        "scheduled_date": sched_date,
+        "scheduled_time": time_slot,
+        "payment_method": "naver",
+        "special_notes": special_notes,
+        "price": total_price,
+    }
+
+    phone = reservation_data["phone"]
+    if len(phone) == 11:
+        reservation_data["phone"] = f"{phone[:3]}-{phone[3:7]}-{phone[7:]}"
+
+    async with async_session() as db:
+        reservation = await create_reservation(db, reservation_data)
+
+    items_text = ", ".join(
+        f"{ITEM_LABELS.get(i['item_type'], i.get('naver_name', '?'))} x{i.get('quantity', 1)}"
+        for i in items
+    )
+
+    await query.edit_message_text(
+        f"✅ 네이버 예약 등록 완료!\n\n"
+        f"예약번호: {reservation.reservation_no}\n"
+        f"예약자: {extracted.get('customer_name', '-')}\n"
+        f"연락처: {reservation_data['phone']}\n"
+        f"품목: {items_text}\n"
+        f"일시: {sched_date.strftime('%Y.%m.%d')} {TIME_LABELS[time_slot]}\n"
+        f"결제: 네이버예약\n"
+        f"합계: {total_price:,}원"
+    )
+
+    await notify_group_new_reservation(context.bot, reservation, reservation_data)
+    context.user_data.pop("naver_reservation", None)

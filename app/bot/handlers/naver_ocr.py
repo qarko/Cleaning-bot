@@ -129,8 +129,11 @@ def parse_naver_text(text: str) -> dict:
             extracted["address"] = addr
 
     # 옵션에서 실제 주문 품목 추출 (핵심!)
+    # OCR 줄바꿈이 불규칙할 수 있으므로 키워드 기반으로 추출
     option_text = extracted.get("option", "")
     option_items = []
+
+    # 방법1: 줄 단위 파싱
     for line in option_text.split("\n"):
         line = line.strip()
         if not line:
@@ -141,6 +144,18 @@ def parse_naver_text(text: str) -> dict:
             if keyword in line:
                 option_items.append({"name": keyword, "type": item_type, "qty": qty})
                 break
+
+    # 방법2: 줄 파싱으로 못 찾으면 전체 텍스트에서 키워드 검색
+    if len(option_items) <= 1 and option_text:
+        option_items = []
+        for keyword, item_type in NAVER_ITEM_MAP.items():
+            # "유모차"가 "쌍둥이유모차"에 포함되므로 정확한 매칭 필요
+            # 각 키워드 뒤에 공백/케어/프리미엄 등이 오는 패턴
+            pattern = rf'{keyword}\s*(?:프리미엄\s*)?(?:케어\s*)?(\d+)'
+            matches = re.findall(pattern, option_text)
+            for qty_str in matches:
+                qty = int(qty_str) if qty_str else 1
+                option_items.append({"name": keyword, "type": item_type, "qty": qty})
 
     if option_items:
         extracted["items"] = option_items

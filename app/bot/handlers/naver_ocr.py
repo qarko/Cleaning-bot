@@ -93,10 +93,21 @@ def parse_naver_text(text: str) -> dict:
     if m:
         extracted["people"] = m.group(1).strip()
 
-    # 옵션
-    m = re.search(r'옵션\s+(.+)', text)
+    # 옵션 (실제 주문 품목) - 여러 줄일 수 있음
+    # "옵션" 이후 "요청사항" 또는 "쿠폰" 전까지의 텍스트
+    m = re.search(r'옵션\s+([\s\S]+?)(?=요청사항|쿠폰|유입경로)', text)
     if m:
         extracted["option"] = m.group(1).strip()
+
+    # 요청사항 (고객 메모 + 별도 연락처 포함 가능)
+    m = re.search(r'요청사항\s+([\s\S]+?)(?=쿠폰|유입경로)', text)
+    if m:
+        request_text = m.group(1).strip()
+        extracted["request"] = request_text
+        # 요청사항에서 별도 연락처 추출
+        phone_m = re.search(r'(\d{3}[-\s]?\d{3,4}[-\s]?\d{4})', request_text)
+        if phone_m:
+            extracted["alt_phone"] = phone_m.group(1).replace(" ", "")
 
     # 쿠폰
     m = re.search(r'쿠폰\s+(.+?)(?:\n|$)', text)
@@ -106,46 +117,65 @@ def parse_naver_text(text: str) -> dict:
             extracted["coupon"] = coupon_text
 
     # 주소 - "예약자입력정보" 아래 주소 찾기
-    m = re.search(r'예약자입력정보.*?\n.*?\n(.+?)(?:\n|$)', text, re.DOTALL)
+    m = re.search(r'예약자입력정보.*?\n.*?\n([\s\S]+?)(?=노쇼|예약취소|이용완료|$)', text)
     if m:
         addr = m.group(1).strip()
         if addr and len(addr) > 3:
             extracted["address"] = addr
 
-    # 상품명에서 품목 리스트 추출
-    product = extracted.get("product", "")
-    items = []
-    for keyword in NAVER_ITEM_MAP:
-        if keyword in product:
-            items.append(keyword)
-    # 옵션에서도 품목 추출
-    option = extracted.get("option", "")
-    for keyword in NAVER_ITEM_MAP:
-        if keyword in option and keyword not in items:
-            items.append(keyword)
-    extracted["items"] = items if items else [product]
+    # 옵션에서 실제 주문 품목 추출 (핵심!)
+    # 옵션 형식: "유모차 프리미엄 케어 1\n카시트 프리미엄 케어 1"
+    option_text = extracted.get("option", "")
+    option_items = []
+    for line in option_text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # 각 줄에서 품목명과 수량 추출: "유모차 프리미엄 케어 1"
+        qty_m = re.search(r'(\d+)\s*$', line)
+        qty = int(qty_m.group(1)) if qty_m else 1
+        for keyword, item_type in NAVER_ITEM_MAP.items():
+            if keyword in line:
+                option_items.append({"name": keyword, "type": item_type, "qty": qty})
+                break
+
+    # 옵션 품목이 있으면 그걸 사용, 없으면 상품명에서 추출
+    if option_items:
+        extracted["items"] = option_items
+    else:
+        product = extracted.get("product", "")
+        items = []
+        for keyword in NAVER_ITEM_MAP:
+            if keyword in product:
+                items.append({"name": keyword, "type": NAVER_ITEM_MAP[keyword], "qty": 1})
+        extracted["items"] = items if items else [{"name": product, "type": "unknown", "qty": 1}]
 
     return extracted
 
 
 def map_items(extracted: dict) -> list[dict]:
-    """추출된 상품 정보를 봇의 품목 형식으로 변환"""
+    """추출된 옵션 품목을 봇의 품목 형식으로 변환"""
     items = []
     naver_items = extracted.get("items", [])
 
-    for name in naver_items:
-        name_lower = name.strip()
-        matched_type = None
-        for keyword, item_type in NAVER_ITEM_MAP.items():
-            if keyword in name_lower:
-                matched_type = item_type
-                break
-
-        if matched_type:
+    for item_info in naver_items:
+        if isinstance(item_info, dict):
             items.append({
-                "item_type": matched_type,
+                "item_type": item_info.get("type", "unknown"),
+                "quantity": item_info.get("qty", 1),
+                "naver_name": item_info.get("name", "알 수 없음"),
+            })
+        else:
+            # 문자열 fallback
+            matched_type = None
+            for keyword, item_type in NAVER_ITEM_MAP.items():
+                if keyword in str(item_info):
+                    matched_type = item_type
+                    break
+            items.append({
+                "item_type": matched_type or "unknown",
                 "quantity": 1,
-                "naver_name": name_lower,
+                "naver_name": str(item_info),
             })
 
     if not items:
@@ -174,12 +204,14 @@ def build_naver_confirm_text(extracted: dict, items: list[dict]) -> str:
         label = ITEM_LABELS.get(item["item_type"], item.get("naver_name", "알 수 없음"))
         items_text += f"  {i}. {label} x{item.get('quantity', 1)}\n"
 
-    option = extracted.get("option", "")
-    option_text = f"옵션: {option}\n" if option else ""
     coupon = extracted.get("coupon", "")
     coupon_text = f"쿠폰: {coupon}\n" if coupon else ""
     address = extracted.get("address", "")
     address_text = f"주소: {address}\n" if address else ""
+    request = extracted.get("request", "")
+    request_text = f"요청사항: {request}\n" if request else ""
+    alt_phone = extracted.get("alt_phone", "")
+    alt_phone_text = f"별도 연락처: {alt_phone}\n" if alt_phone else ""
 
     return (
         "━━━━━━━━━━━━━━\n"
@@ -187,16 +219,17 @@ def build_naver_confirm_text(extracted: dict, items: list[dict]) -> str:
         "━━━━━━━━━━━━━━\n"
         f"예약자: {extracted.get('customer_name', '-')}\n"
         f"연락처: {extracted.get('phone', '-')}\n"
+        f"{alt_phone_text}"
         f"네이버 예약번호: {extracted.get('reservation_number', '-')}\n"
         f"{address_text}"
         f"━━━━━━━━━━━━━━\n"
-        f"상품: {extracted.get('product', '-')}\n"
-        f"{option_text}"
+        f"주문 품목:\n"
         f"{items_text}"
         f"━━━━━━━━━━━━━━\n"
         f"일시: {extracted.get('date', '-')} {extracted.get('time', '-')}\n"
         f"결제: 네이버예약\n"
         f"{coupon_text}"
+        f"{request_text}"
         "━━━━━━━━━━━━━━\n"
         "\n이 정보로 예약을 등록할까요?"
     )
@@ -298,12 +331,14 @@ async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
     notes_parts = []
     if extracted.get("reservation_number"):
         notes_parts.append(f"네이버예약#{extracted['reservation_number']}")
-    if extracted.get("option"):
-        notes_parts.append(f"옵션: {extracted['option']}")
+    if extracted.get("request"):
+        notes_parts.append(extracted["request"])
     if extracted.get("coupon"):
         notes_parts.append(f"쿠폰: {extracted['coupon']}")
     if extracted.get("customer_name"):
         notes_parts.append(f"예약자: {extracted['customer_name']}")
+    if extracted.get("alt_phone"):
+        notes_parts.append(f"별도연락처: {extracted['alt_phone']}")
     special_notes = " | ".join(notes_parts) if notes_parts else None
 
     address = extracted.get("address", "")
@@ -313,9 +348,12 @@ async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
     elif "논산" in address:
         area = "nonsan"
 
+    # 별도 연락처가 있으면 그걸 사용
+    phone = extracted.get("alt_phone") or extracted.get("phone", "010-0000-0000")
+
     reservation_data = {
         "name": address or extracted.get("customer_name", "네이버예약"),
-        "phone": extracted.get("phone", "010-0000-0000").replace("-", "").replace(" ", ""),
+        "phone": phone.replace("-", "").replace(" ", ""),
         "area": area,
         "address": address,
         "items": items,

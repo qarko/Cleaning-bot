@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
         BotCommand("cancel", "예약 등록 취소"),
     ])
 
-    # 스케줄러 (매일 아침 8시 일정 알림)
+    # 스케줄러 (매일 아침 9시 일정 알림)
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(
         lambda: asyncio.create_task(send_daily_schedule(bot_app.bot)),

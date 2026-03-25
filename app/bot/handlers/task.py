@@ -96,9 +96,10 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             r = await update_reservation_status(db, reservation_no, "confirmed")
         if r:
             item = ITEM_LABELS.get(r.item_type, r.item_type)
+            display = r.pickup_address or (r.customer.phone if r.customer else "")
             await query.edit_message_text(
                 f"✅ {reservation_no} 예약 확정!\n"
-                f"고객: {r.customer.name} | {item} x{r.quantity}",
+                f"{display} | {item} x{r.quantity}",
                 reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=employee.role),
             )
             await notify_group_status_change(context.bot, r, "confirmed", employee.name, sender_role=employee.role)
@@ -298,6 +299,7 @@ async def mytasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for r in active:
         item = ITEM_LABELS.get(r.item_type, r.item_type)
         status = STATUS_LABELS.get(r.status, r.status)
-        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {r.customer.name} | {item} [{status}]"
+        display = r.pickup_address or (r.customer.phone if r.customer else "")
+        text += f"\n{TIME_LABELS.get(r.scheduled_time, '')} | {display} | {item} [{status}]"
 
     await update.message.reply_text(text, reply_markup=reservation_list_keyboard(active))

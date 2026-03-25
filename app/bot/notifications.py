@@ -85,10 +85,10 @@ def build_reservation_card(reservation, items_data=None, status_history=None) ->
                 break
         progress = " → ".join(progress_parts)
 
-    customer_name = reservation.customer.name if hasattr(reservation, 'customer') and reservation.customer else "?"
     customer_phone = reservation.customer.phone if hasattr(reservation, 'customer') and reservation.customer else ""
     notes = reservation.special_notes or ""
     area = AREA_LABELS.get(reservation.area or "", "")
+    address = reservation.pickup_address or ""
     sched = ""
     if hasattr(reservation, 'scheduled_date') and reservation.scheduled_date:
         sched = f"{reservation.scheduled_date.strftime('%Y.%m.%d')} {TIME_LABELS.get(reservation.scheduled_time or '', '')}"
@@ -97,16 +97,13 @@ def build_reservation_card(reservation, items_data=None, status_history=None) ->
         f"━━━━━━━━━━━━━━\n"
         f"📋 {reservation.reservation_no}\n"
         f"━━━━━━━━━━━━━━\n"
-        f"고객: {customer_name}"
     )
     if customer_phone:
-        text += f" ({customer_phone})"
-    text += f"\n"
-
+        text += f"연락처: {customer_phone}\n"
     if area:
         text += f"지역: {area}\n"
-    if reservation.pickup_address:
-        text += f"주소: {reservation.pickup_address}\n"
+    if address:
+        text += f"주소: {address}\n"
 
     text += f"\n{items_text}\n"
 

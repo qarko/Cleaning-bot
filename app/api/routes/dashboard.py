@@ -107,11 +107,12 @@ async def get_summary(request: Request):
                 pass
         reservations_data.append({
             "reservation_no": r.reservation_no,
-            "customer_name": r.customer.name if r.customer else "",
+            "customer_name": r.pickup_address or (r.customer.phone if r.customer else ""),
             "items": items,
             "status": r.status,
             "scheduled_time": r.scheduled_time,
             "price": r.price,
+            "payment_method": r.payment_method,
         })
 
     return {
@@ -160,7 +161,7 @@ async def get_calendar(request: Request, year: int = Query(None), month: int = Q
             calendar_data[day] = []
         calendar_data[day].append({
             "reservation_no": r.reservation_no,
-            "customer_name": r.customer.name if r.customer else "",
+            "customer_name": r.pickup_address or (r.customer.phone if r.customer else ""),
             "status": r.status,
             "scheduled_time": r.scheduled_time,
             "price": r.price,

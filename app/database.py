@@ -18,4 +18,6 @@ async def get_db() -> AsyncSession:
 async def init_db():
     async with engine.begin() as conn:
         from app.models import customer, reservation, employee, task_update, payment, pricing
+        # v3 스키마 마이그레이션 - 1회성 초기화
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

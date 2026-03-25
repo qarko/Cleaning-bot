@@ -236,6 +236,8 @@ def build_naver_confirm_text(extracted: dict, items: list[dict]) -> str:
     request_text = f"요청사항: {request}\n" if request else ""
     alt_phone = extracted.get("alt_phone", "")
     alt_phone_text = f"별도 연락처: {alt_phone}\n" if alt_phone else ""
+    user_note = extracted.get("user_note", "")
+    user_note_text = f"📝 특이사항: {user_note}\n" if user_note else ""
 
     return (
         "━━━━━━━━━━━━━━\n"
@@ -254,6 +256,7 @@ def build_naver_confirm_text(extracted: dict, items: list[dict]) -> str:
         f"결제: 네이버예약\n"
         f"{coupon_text}"
         f"{request_text}"
+        f"{user_note_text}"
         "━━━━━━━━━━━━━━\n"
         "\n이 정보로 예약을 등록할까요?"
     )
@@ -262,6 +265,7 @@ def build_naver_confirm_text(extracted: dict, items: list[dict]) -> str:
 def naver_confirm_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ 등록", callback_data="naver:yes")],
+        [InlineKeyboardButton("📝 특이사항 입력", callback_data="naver:note")],
         [InlineKeyboardButton("❌ 취소", callback_data="naver:cancel")],
     ])
 
@@ -318,6 +322,26 @@ async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     }
 
 
+async def naver_note_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """특이사항 텍스트 입력 수신"""
+    if not context.user_data.get("naver_waiting_note"):
+        return  # group=2에서만 동작, 다른 핸들러에 영향 없음
+
+    naver_data = context.user_data.get("naver_reservation")
+    if not naver_data:
+        context.user_data.pop("naver_waiting_note", None)
+        return
+
+    note_text = update.message.text.strip()
+    naver_data["extracted"]["user_note"] = note_text
+    context.user_data.pop("naver_waiting_note", None)
+
+    items = map_items(naver_data["extracted"])
+    naver_data["items"] = items
+    text = build_naver_confirm_text(naver_data["extracted"], items)
+    await update.message.reply_text(text, reply_markup=naver_confirm_keyboard())
+
+
 async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """네이버 예약 확인/취소 콜백"""
     query = update.callback_query
@@ -329,6 +353,14 @@ async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
     if action == "cancel" or not naver_data:
         context.user_data.pop("naver_reservation", None)
         await query.edit_message_text("네이버 예약 등록이 취소되었습니다.")
+        return
+
+    if action == "note":
+        context.user_data["naver_waiting_note"] = True
+        await query.edit_message_text(
+            query.message.text + "\n\n✏️ 특이사항을 입력해주세요.\n"
+            "(누락된 정보나 추가 메모를 자유롭게 입력)"
+        )
         return
 
     extracted = naver_data["extracted"]
@@ -362,6 +394,8 @@ async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
         notes_parts.append(f"예약자: {extracted['customer_name']}")
     if extracted.get("alt_phone"):
         notes_parts.append(f"별도연락처: {extracted['alt_phone']}")
+    if extracted.get("user_note"):
+        notes_parts.append(f"특이사항: {extracted['user_note']}")
     special_notes = " | ".join(notes_parts) if notes_parts else None
 
     address = extracted.get("address", "")

@@ -13,7 +13,7 @@ from app.bot.handlers.reservation import get_reservation_handler, today_command,
 from app.bot.handlers.task import action_callback, photo_handler, skip_photo_handler, payment_callback, delivery_date_callback, mytasks_command
 from app.bot.handlers.quote import quote_command, quote_item_callback, quote_subtype_callback, quote_method_callback, quote_qty_callback
 from app.bot.handlers.customer import customer_command
-from app.bot.handlers.naver_ocr import naver_confirm_callback
+from app.bot.handlers.naver_ocr import naver_confirm_callback, naver_note_handler
 from app.bot.handlers.menu import menu_handler
 from app.bot.notifications import send_daily_schedule
 
@@ -72,6 +72,12 @@ async def lifespan(app: FastAPI):
         filters.TEXT & ~filters.COMMAND,
         skip_photo_handler,
     ), group=1)  # group=1로 분리하여 ConversationHandler와 충돌 방지
+
+    # 네이버 예약 특이사항 입력 핸들러 (별도 group으로 충돌 방지)
+    bot_app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        naver_note_handler,
+    ), group=2)
 
     # 글로벌 에러 핸들러
     async def error_handler(update, context):

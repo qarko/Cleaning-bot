@@ -145,7 +145,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ {reservation_no} → {status_label}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=employee.role),
         )
-        await notify_group_status_change(context.bot, r, action, employee.name, sender_role=employee.role)
+        await notify_group_status_change(context.bot, r, action, employee.name, sender_role=employee.role, photo_url=None)
 
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,7 +183,12 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ {reservation_no} → {status_label}{photo_text}{delivery_text}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=pending.get("employee_role", "staff")),
         )
-        await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
+        await notify_group_status_change(
+            context.bot, r, status, pending["employee_name"],
+            sender_role=pending.get("employee_role", ""),
+            photo_url=photo_url,
+            delivery_date=pending.get("delivery_date"),
+        )
 
     context.user_data.pop("pending_action", None)
 
@@ -215,7 +220,11 @@ async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"✅ {reservation_no} → {status_label}{delivery_text}{memo_text}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=pending.get("employee_role", "staff")),
         )
-        await notify_group_status_change(context.bot, r, status, pending["employee_name"], sender_role=pending.get("employee_role", ""))
+        await notify_group_status_change(
+            context.bot, r, status, pending["employee_name"],
+            sender_role=pending.get("employee_role", ""),
+            delivery_date=pending.get("delivery_date"),
+        )
 
     context.user_data.pop("pending_action", None)
 

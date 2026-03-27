@@ -219,10 +219,44 @@ async def notify_group_new_reservation(bot: Bot, reservation, data: dict):
     await send_or_update_card(bot, reservation, target_role="staff", items_data=items)
 
 
-async def notify_group_status_change(bot: Bot, reservation, new_status: str, employee_name: str = "", sender_role: str = ""):
-    """상태 변경 → 양쪽 모두 카드 업데이트"""
-    # 모든 사용자의 카드를 업데이트
+async def notify_group_status_change(bot: Bot, reservation, new_status: str, employee_name: str = "", sender_role: str = "", photo_url: str = None, delivery_date: str = None):
+    """상태 변경 → 양쪽 모두 카드 업데이트 + 대표에게 알림 별도 전송"""
+    # 모든 사용자의 카드를 업데이트 (edit_message)
     await send_or_update_card(bot, reservation)
+
+    # 대표에게 상태 변경 알림을 새 메시지로 전송 (push 알림이 오도록)
+    status_label = STATUS_LABELS.get(new_status, new_status)
+    status_emoji_map = {
+        "confirmed": "✅", "picking_up": "🚗", "picked_up": "📦",
+        "cleaning": "🧹", "cleaned": "✨", "delivering": "🚚",
+        "delivered": "🏠", "settled": "💰", "cancelled": "❌",
+    }
+    emoji = status_emoji_map.get(new_status, "📌")
+    worker = employee_name or "시스템"
+
+    alert_text = f"{emoji} [{reservation.reservation_no}] {status_label}"
+    if employee_name:
+        alert_text += f" ({employee_name})"
+    if delivery_date:
+        alert_text += f"\n📦 배송 예정: {delivery_date}"
+
+    boss_list = await get_employees_by_role("boss")
+    for boss in boss_list:
+        try:
+            # 사진이 있으면 사진과 함께 전송
+            if photo_url:
+                await bot.send_photo(
+                    chat_id=boss.telegram_user_id,
+                    photo=photo_url,
+                    caption=alert_text,
+                )
+            else:
+                await bot.send_message(
+                    chat_id=boss.telegram_user_id,
+                    text=alert_text,
+                )
+        except Exception as e:
+            logger.error(f"Boss alert failed {boss.telegram_user_id}: {e}")
 
 
 async def send_daily_schedule(bot: Bot):

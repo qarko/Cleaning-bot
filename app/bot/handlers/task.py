@@ -27,6 +27,20 @@ STATUS_STAGE_MAP = {
 
 PHOTO_STAGES = {"picked_up", "cleaned", "delivered"}
 
+# 상태 전환 유효성 맵: 현재 상태 → 허용되는 다음 상태
+VALID_TRANSITIONS = {
+    "pending":     {"confirmed", "cancel", "cancelconfirm"},
+    "confirmed":   {"picking_up", "cancel", "cancelconfirm"},
+    "picking_up":  {"picked_up", "cancel", "cancelconfirm"},
+    "picked_up":   {"cleaning", "cancel", "cancelconfirm"},
+    "cleaning":    {"cleaned", "cancel", "cancelconfirm"},
+    "cleaned":     {"delivering", "cancel", "cancelconfirm"},
+    "delivering":  {"delivered", "cancel", "cancelconfirm"},
+    "delivered":   {"settle", "cancel", "cancelconfirm"},
+    "settled":     set(),   # 최종 상태 — 변경 불가
+    "cancelled":   set(),   # 최종 상태 — 변경 불가
+}
+
 
 async def get_employee(user_id: int) -> Employee | None:
     async with async_session() as db:
@@ -49,6 +63,19 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not employee:
         await query.edit_message_text("먼저 /start 로 등록해주세요.")
         return
+
+    # 상태 전환 유효성 검사
+    async with async_session() as db:
+        current = await get_reservation(db, reservation_no)
+    if current:
+        allowed = VALID_TRANSITIONS.get(current.status, set())
+        if action not in allowed:
+            status_label = STATUS_LABELS.get(current.status, current.status)
+            await query.edit_message_text(
+                f"⚠️ 현재 상태({status_label})에서는 이 작업을 수행할 수 없습니다.",
+                reply_markup=reservation_action_keyboard(current.reservation_no, current.status, role=employee.role),
+            )
+            return
 
     # 정산 처리
     if action == "settle":
@@ -269,6 +296,13 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "결제 방법을 선택해주세요:",
             reply_markup=payment_method_keyboard(reservation_no),
         )
+        return
+
+    # 정산 중복 방어
+    async with async_session() as db:
+        check = await get_reservation(db, reservation_no)
+    if check and check.status == "settled":
+        await query.edit_message_text(f"이미 정산 완료된 예약입니다. ({reservation_no})")
         return
 
     async with async_session() as db:

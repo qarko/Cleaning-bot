@@ -168,8 +168,9 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         r = await update_reservation_status(db, reservation_no, action)
     if r:
         status_label = STATUS_LABELS.get(action, action)
+        address = r.pickup_address or reservation_no
         await query.edit_message_text(
-            f"✅ {reservation_no} → {status_label}",
+            f"✅ {address} → {status_label}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=employee.role),
         )
         await notify_group_status_change(context.bot, r, action, employee.name, sender_role=employee.role, photo_url=None)
@@ -202,12 +203,13 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if r:
         status_label = STATUS_LABELS.get(status, status)
+        address = r.pickup_address or reservation_no
         photo_text = " (사진 첨부)" if photo_url else ""
         delivery_text = ""
         if pending.get("delivery_date"):
             delivery_text = f"\n📦 배송 예정: {pending['delivery_date']}"
         await update.message.reply_text(
-            f"✅ {reservation_no} → {status_label}{photo_text}{delivery_text}",
+            f"✅ {address} → {status_label}{photo_text}{delivery_text}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=pending.get("employee_role", "staff")),
         )
         await notify_group_status_change(
@@ -239,12 +241,13 @@ async def skip_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if r:
         status_label = STATUS_LABELS.get(status, status)
+        address = r.pickup_address or reservation_no
         delivery_text = ""
         if pending.get("delivery_date"):
             delivery_text = f"\n📦 배송 예정: {pending['delivery_date']}"
         memo_text = f"\n메모: {memo}" if memo else ""
         await update.message.reply_text(
-            f"✅ {reservation_no} → {status_label}{delivery_text}{memo_text}",
+            f"✅ {address} → {status_label}{delivery_text}{memo_text}",
             reply_markup=reservation_action_keyboard(r.reservation_no, r.status, role=pending.get("employee_role", "staff")),
         )
         await notify_group_status_change(

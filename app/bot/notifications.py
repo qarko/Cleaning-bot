@@ -234,7 +234,9 @@ async def notify_group_status_change(bot: Bot, reservation, new_status: str, emp
     emoji = status_emoji_map.get(new_status, "📌")
     worker = employee_name or "시스템"
 
-    alert_text = f"{emoji} [{reservation.reservation_no}] {status_label}"
+    # 주소로 표시 (대표/관리자가 주소로 소통하므로)
+    address = reservation.pickup_address or reservation.reservation_no
+    alert_text = f"{emoji} {address} — {status_label}"
     if employee_name:
         alert_text += f" ({employee_name})"
     if delivery_date:

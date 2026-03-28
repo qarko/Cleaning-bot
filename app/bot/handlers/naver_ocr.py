@@ -51,7 +51,7 @@ async def ocr_google_vision(image_bytes: bytes) -> str | None:
         )
 
     if resp.status_code != 200:
-        logger.error(f"Google Vision API error: {resp.status_code} {resp.text}")
+        logger.error(f"Google Vision API error: {resp.status_code}")
         return None
 
     result = resp.json()

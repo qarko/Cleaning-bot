@@ -133,6 +133,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cleaning Business Bot", lifespan=lifespan)
 
+# CORS 설정
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://ai-agent-team-production-a7cf.up.railway.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["X-Telegram-Init-Data"],
+)
+
 # API 라우터
 from app.api.routes.dashboard import router as dashboard_router
 app.include_router(dashboard_router)

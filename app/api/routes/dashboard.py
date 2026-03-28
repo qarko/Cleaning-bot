@@ -1,3 +1,4 @@
+import time
 from datetime import date, timedelta, datetime
 from fastapi import APIRouter, Query, Request, HTTPException
 from sqlalchemy import select, func, extract
@@ -37,6 +38,16 @@ def verify_telegram_init_data(init_data: str) -> dict | None:
 
         if computed_hash != check_hash:
             return None
+
+        # auth_date 만료 검증 (1시간)
+        auth_date_str = parsed.get("auth_date", [None])[0]
+        if auth_date_str:
+            try:
+                auth_ts = int(auth_date_str)
+                if time.time() - auth_ts > 3600:
+                    return None
+            except (ValueError, TypeError):
+                return None
 
         # user 정보 파싱
         user_data = parsed.get("user", [None])[0]
@@ -326,10 +337,6 @@ async def search_customer(request: Request, q: str = Query("")):
         search = q.strip().replace("-", "").replace(" ", "")
         if search.isdigit() and len(search) >= 3:
             # 숫자면 연락처 검색 (부분 일치)
-            formatted_patterns = [
-                f"%{search}%",
-                f"%{search[:3]}-{search[3:7]}-{search[7:]}%" if len(search) >= 7 else f"%{search}%",
-            ]
             from sqlalchemy import or_
             result = await db.execute(
                 select(Customer).where(

@@ -29,7 +29,7 @@ PHOTO_STAGES = {"picked_up", "cleaned", "delivered"}
 
 # 상태 전환 유효성 맵: 현재 상태 → 허용되는 다음 상태
 VALID_TRANSITIONS = {
-    "pending":     {"confirmed", "cancel", "cancelconfirm"},
+    "pending":     {"confirm", "confirmed", "cancel", "cancelconfirm"},
     "confirmed":   {"picking_up", "cancel", "cancelconfirm"},
     "picking_up":  {"picked_up", "cancel", "cancelconfirm"},
     "picked_up":   {"cleaning", "cancel", "cancelconfirm"},

@@ -155,11 +155,28 @@ def parse_naver_text(text: str) -> dict:
     option_items = []
     found_types = set()
     for keyword, item_type in NAVER_ITEM_MAP.items():
+        # 패턴 1: "카시트 프리미엄 케어 2"
         pattern = rf'{keyword}\s*프리미엄\s*케어\s*(\d+)'
         matches = re.findall(pattern, text)
         for qty_str in matches:
             if keyword not in found_types:
-                qty = int(qty_str) if qty_str else 1
+                try:
+                    qty = int(qty_str) if qty_str else 1
+                    qty = max(1, min(qty, 20))  # 안전 범위 1~20
+                except (ValueError, TypeError):
+                    qty = 1
+                option_items.append({"name": keyword, "type": item_type, "qty": qty})
+                found_types.add(keyword)
+        # 패턴 2: "카시트 프리미엄케어 2" (공백 없이)
+        if keyword not in found_types:
+            pattern2 = rf'{keyword}\s*프리미엄케어\s*(\d*)'
+            m2 = re.search(pattern2, text)
+            if m2:
+                try:
+                    qty = int(m2.group(1)) if m2.group(1) else 1
+                    qty = max(1, min(qty, 20))
+                except (ValueError, TypeError):
+                    qty = 1
                 option_items.append({"name": keyword, "type": item_type, "qty": qty})
                 found_types.add(keyword)
 
@@ -379,9 +396,17 @@ async def naver_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
         if item["item_type"] != "unknown":
             async with async_session() as db:
                 price = await get_price(db, item["item_type"], item.get("item_subtype"))
-            item["price"] = price * item.get("quantity", 1)
+                # subtype 없이 재시도 (subtype이 None이 아닌데 못 찾은 경우)
+                if price == 0 and item.get("item_subtype"):
+                    price = await get_price(db, item["item_type"])
+            qty = item.get("quantity", 1)
+            if not isinstance(qty, int) or qty < 1:
+                qty = 1
+            item["price"] = price * qty
             item["unit_price"] = price
             total_price += item["price"]
+            if price == 0:
+                logger.warning(f"가격 조회 실패: item_type={item['item_type']}, subtype={item.get('item_subtype')}")
 
     notes_parts = []
     if extracted.get("reservation_number"):

@@ -313,6 +313,10 @@ async def naver_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     extracted = parse_naver_text(ocr_text)
     if not extracted.get("date"):
         logger.warning(f"날짜 파싱 실패 - OCR 텍스트에서 이용일시를 찾지 못함")
+        await update.message.reply_text(
+            "⚠️ 예약 날짜를 인식하지 못했습니다.\n"
+            "날짜를 수동으로 확인 후 등록해주세요."
+        )
 
     # 네이버 예약 화면 확인: 핵심 필드 중 하나라도 있으면 통과
     has_info = (

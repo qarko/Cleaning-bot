@@ -39,15 +39,16 @@ def verify_telegram_init_data(init_data: str) -> dict | None:
         if computed_hash != check_hash:
             return None
 
-        # auth_date 만료 검증 (1시간)
+        # auth_date 만료 검증 (24시간)
         auth_date_str = parsed.get("auth_date", [None])[0]
-        if auth_date_str:
-            try:
-                auth_ts = int(auth_date_str)
-                if time.time() - auth_ts > 3600:
-                    return None
-            except (ValueError, TypeError):
+        if not auth_date_str:
+            return None  # auth_date 누락 시 거부
+        try:
+            auth_ts = int(auth_date_str)
+            if time.time() - auth_ts > 86400:  # 24시간 = 86400초
                 return None
+        except (ValueError, TypeError):
+            return None
 
         # user 정보 파싱
         user_data = parsed.get("user", [None])[0]
@@ -146,6 +147,10 @@ async def get_calendar(request: Request, year: int = Query(None), month: int = Q
         year = today.year
     if not month:
         month = today.month
+
+    if not (1 <= month <= 12) or not (2000 <= year <= 2100):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="잘못된 연도 또는 월입니다")
 
     start = date(year, month, 1)
     if month == 12:

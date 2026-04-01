@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models.reservation import Reservation
@@ -40,35 +41,47 @@ async def get_or_create_customer(db: AsyncSession, name: str, phone: str, addres
 async def create_reservation(db: AsyncSession, data: dict) -> Reservation:
     customer = await get_or_create_customer(db, data["name"], data["phone"], data.get("address"))
 
-    reservation_no = await generate_reservation_no(db, data.get("scheduled_date", date.today()))
-
     import json
     items = data.get("items", [])
     # 대표 품목 (첫 번째)
     first_item = items[0] if items else {}
     total_qty = sum(i.get("quantity", 1) for i in items) if items else data.get("quantity", 1)
 
-    reservation = Reservation(
-        reservation_no=reservation_no,
-        customer_id=customer.id,
-        item_type=first_item.get("item_type", data.get("item_type", "")),
-        item_subtype=first_item.get("item_subtype", data.get("item_subtype")),
-        quantity=total_qty,
-        scheduled_date=data["scheduled_date"],
-        scheduled_time=data["scheduled_time"],
-        pickup_address=data.get("address"),
-        cleaning_method=first_item.get("cleaning_method", data.get("cleaning_method")),
-        area=data.get("area"),
-        payment_method=data.get("payment_method"),
-        items_json=json.dumps(items, ensure_ascii=False) if items else None,
-        special_notes=data.get("special_notes"),
-        status="pending",
-        price=data.get("price", 0),
-    )
-    db.add(reservation)
-    await db.commit()
-    await db.refresh(reservation, ["customer"])
-    return reservation
+    scheduled_date = data.get("scheduled_date", date.today())
+
+    # 예약번호 생성 - unique constraint 충돌 시 최대 3회 재시도
+    max_retries = 3
+    for attempt in range(max_retries):
+        reservation_no = await generate_reservation_no(db, scheduled_date)
+
+        reservation = Reservation(
+            reservation_no=reservation_no,
+            customer_id=customer.id,
+            item_type=first_item.get("item_type", data.get("item_type", "")),
+            item_subtype=first_item.get("item_subtype", data.get("item_subtype")),
+            quantity=total_qty,
+            scheduled_date=scheduled_date,
+            scheduled_time=data["scheduled_time"],
+            pickup_address=data.get("address"),
+            cleaning_method=first_item.get("cleaning_method", data.get("cleaning_method")),
+            area=data.get("area"),
+            payment_method=data.get("payment_method"),
+            items_json=json.dumps(items, ensure_ascii=False) if items else None,
+            special_notes=data.get("special_notes"),
+            status="pending",
+            price=data.get("price", 0),
+        )
+        db.add(reservation)
+        try:
+            await db.commit()
+            await db.refresh(reservation, ["customer"])
+            return reservation
+        except IntegrityError:
+            await db.rollback()
+            if attempt == max_retries - 1:
+                raise
+            # 재시도 시 customer를 다시 merge (rollback으로 세션에서 분리됨)
+            customer = await get_or_create_customer(db, data["name"], data["phone"], data.get("address"))
 
 
 async def get_reservation(db: AsyncSession, reservation_no: str) -> Reservation | None:
@@ -138,10 +151,15 @@ async def add_task_update(db: AsyncSession, reservation_id: int, stage: str, emp
     return task
 
 
-async def settle_reservation(db: AsyncSession, reservation_no: str, method: str) -> Payment | None:
+async def settle_reservation(db: AsyncSession, reservation_no: str, method: str) -> Payment | str | None:
+    """정산 처리. 성공 시 Payment 반환, 이미 정산됐으면 "already_settled" 문자열 반환, 예약 없으면 None."""
     reservation = await get_reservation(db, reservation_no)
     if not reservation:
         return None
+
+    # 중복 정산 방지: 이미 정산된 예약은 거부
+    if reservation.status == "settled":
+        return "already_settled"
 
     amount = reservation.final_price or reservation.price
     payment = Payment(

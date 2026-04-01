@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, fil
 from sqlalchemy import select
 from app.database import async_session
 from app.models.employee import Employee
+from app.models.payment import Payment
 from app.models.reservation import Reservation
 from app.services.reservation_service import (
     get_reservation, update_reservation_status, add_task_update,
@@ -309,9 +310,14 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     async with async_session() as db:
-        payment = await settle_reservation(db, reservation_no, method)
+        result = await settle_reservation(db, reservation_no, method)
 
-    if payment:
+    if result == "already_settled":
+        await query.edit_message_text(f"⚠️ 이미 정산된 예약입니다. ({reservation_no})")
+        return
+
+    if result and isinstance(result, Payment):
+        payment = result
         method_label = PAYMENT_LABELS.get(method, method)
         await query.edit_message_text(
             f"💰 정산 완료!\n\n"
